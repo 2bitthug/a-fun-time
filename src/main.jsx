@@ -61,22 +61,40 @@ function Auth({ onLogin }) {
     event.preventDefault()
     setError('')
     setNotice('')
+
     const user = username.trim().toLowerCase()
     const normalizedEmail = email.trim().toLowerCase()
 
-    if (!isSupabaseConfigured) return setError('Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.')
-    if (!/^[a-z0-9_]{3,24}$/.test(user)) return setError('Username must be 3–24 characters using letters, numbers, or underscores.')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return setError('Enter a valid email address.')
-    if (password.length < 6) return setError('Password must be at least 6 characters.')
+    if (!isSupabaseConfigured) {
+      return setError('Supabase is not configured yet.')
+    }
+
+    if (!/^[a-z0-9_]{3,24}$/.test(user)) {
+      return setError('Username must be 3–24 characters using letters, numbers, or underscores.')
+    }
+
+    if (mode === 'register') {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return setError('Enter a valid email address.')
+      }
+    }
+
+    if (password.length < 6) {
+      return setError('Password must be at least 6 characters.')
+    }
 
     setBusy(true)
+
     try {
       if (mode === 'register') {
         const { data, error: signError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { data: { username: user } },
+          options: {
+            data: { username: user }
+          }
         })
+
         if (signError) throw signError
         if (!data.user) throw new Error('Unable to create the account.')
 
@@ -84,16 +102,36 @@ function Auth({ onLogin }) {
           setNotice('Account created. Check your email for the confirmation link, then sign in.')
           setMode('login')
           setPassword('')
+          setEmail('')
           return
         }
       } else {
-        const { data, error: signError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        })
-        if (signError) throw signError
-        if (!data.user) throw new Error('Unable to sign in.')
+        const { data: emailData, error: lookupError } = await supabase.rpc(
+          'get_email_from_username',
+          { input_username: user }
+        )
+
+        if (lookupError) throw lookupError
+
+        if (!emailData) {
+          throw new Error('Invalid username or password.')
+        }
+
+        const { data, error: signError } =
+          await supabase.auth.signInWithPassword({
+            email: emailData,
+            password
+          })
+
+        if (signError) {
+          throw new Error('Invalid username or password.')
+        }
+
+        if (!data.user) {
+          throw new Error('Unable to sign in.')
+        }
       }
+
       onLogin(user)
     } catch (err) {
       setError(err.message || 'Unable to continue.')
@@ -106,41 +144,131 @@ function Auth({ onLogin }) {
     setMode(mode === 'login' ? 'register' : 'login')
     setError('')
     setNotice('')
+    setPassword('')
+    setEmail('')
   }
 
-  return <main className="auth-shell">
-    <div className="auth-card">
-      <p className="eyebrow">A FUN TIME</p>
-      <h1>{mode === 'login' ? 'Welcome back.' : 'Create your account.'}</h1>
-      <p className="lead">
-        {mode === 'login'
-          ? 'Sign in with the email and password you used when registering.'
-          : 'Choose a public username and register with your email and password.'}
-      </p>
-      <form onSubmit={submit}>
-        <label htmlFor="username">Username</label>
-        <input id="username" value={username} onChange={(e) => { setUsername(e.target.value); setError(''); setNotice('') }} autoComplete="username" placeholder="e.g. kaushik_01" />
+  return (
+    <main className="auth-shell">
+      <div className="auth-card">
+        <p className="eyebrow">A FUN TIME</p>
 
-        <label htmlFor="email" className="field-label">Email address</label>
-        <input id="email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); setNotice('') }} autoComplete="email" placeholder="you@example.com" />
+        <h1>
+          {mode === 'login'
+            ? 'Welcome back.'
+            : 'Create your account.'}
+        </h1>
 
-        <label htmlFor="password" className="field-label">Password</label>
-        <input id="password" type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); setNotice('') }} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 6 characters" />
+        <p className="lead">
+          {mode === 'login'
+            ? 'Sign in with your username and password.'
+            : 'Choose a username and register with your email and password.'}
+        </p>
 
-        {error && <ErrorMessage message={error} />}
-        {notice && <p className="status notice" role="status">{notice}</p>}
-        <button className="button primary full" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Register'}</button>
-      </form>
-      <button className="switch-auth" type="button" onClick={switchMode}>
-        {mode === 'login' ? 'Need an account? Register' : 'Already have an account? Sign in'}
-      </button>
-      <div className="demo-notice"><strong>Secure account storage</strong><span>Supabase Auth handles password storage and verification. Your username is stored in the profiles table for search, connections, and chat; passwords are not stored there.</span></div>
-    </div>
-  </main>
+        <form onSubmit={submit}>
+          <label htmlFor="username">Username</label>
+
+          <input
+            id="username"
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value)
+              setError('')
+              setNotice('')
+            }}
+            autoComplete="username"
+            placeholder="e.g. kaushik_01"
+          />
+
+          {mode === 'register' && (
+            <>
+              <label htmlFor="email" className="field-label">
+                Email address
+              </label>
+
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  setError('')
+                  setNotice('')
+                }}
+                autoComplete="email"
+                placeholder="you@example.com"
+              />
+            </>
+          )}
+
+          <label htmlFor="password" className="field-label">
+            Password
+          </label>
+
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value)
+              setError('')
+              setNotice('')
+            }}
+            autoComplete={
+              mode === 'login'
+                ? 'current-password'
+                : 'new-password'
+            }
+            placeholder="At least 6 characters"
+          />
+
+          {error && <ErrorMessage message={error} />}
+
+          {notice && (
+            <p className="status notice" role="status">
+              {notice}
+            </p>
+          )}
+
+          <button
+            className="button primary full"
+            type="submit"
+            disabled={busy}
+          >
+            {busy
+              ? 'Please wait…'
+              : mode === 'login'
+                ? 'Sign in'
+                : 'Register'}
+          </button>
+        </form>
+
+        <button
+          className="switch-auth"
+          type="button"
+          onClick={switchMode}
+        >
+          {mode === 'login'
+            ? 'Need an account? Register'
+            : 'Already have an account? Sign in'}
+        </button>
+
+        <div className="demo-notice">
+          <strong>Secure account storage</strong>
+          <span>
+            Passwords are securely handled by Supabase Auth.
+            Your username is stored separately for your profile,
+            connections, and chat.
+          </span>
+        </div>
+      </div>
+    </main>
+  )
 }
+
 function PokemonSection() {
   const [pokemon, setPokemon] = useState(null), [query, setQuery] = useState('pikachu'), [loading, setLoading] = useState(false), [error, setError] = useState('')
-  const load = useCallback(async (name = query) => { setLoading(true); setError(''); try { setPokemon(await fetchJson(LEGACY_SOURCES.pokemon(name)))} catch { setPokemon(null); setError('Pokémon not found. Try a name such as pikachu or charizard.')} finally { setLoading(false) } }, [query])
+  const load = useCallback(async (name = query) => { setLoading(true); setError(''); try { setPokemon(await fetchJson(LEGACY_SOURCES.pokemon(name))) } catch { setPokemon(null); setError('Pokémon not found. Try a name such as pikachu or charizard.') } finally { setLoading(false) } }, [query])
   useEffect(() => { load('pikachu') }, [])
   return <Card id="pokemon" eyebrow="01 · Pokémon data" title="Pokémon explorer">
     <form className="input-row" onSubmit={(e) => { e.preventDefault(); load() }}><input aria-label="Pokémon name" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Try pikachu or charizard" /><button className="button primary" disabled={loading}>{loading ? 'Loading…' : 'Search'}</button></form>
@@ -150,15 +278,15 @@ function PokemonSection() {
   </Card>
 }
 
-const SUITS = ['♠','♥','♦','♣']
-const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A']
+const SUITS = ['♠', '♥', '♦', '♣']
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 
 function makeDeck() {
   return SUITS.flatMap(suit => RANKS.map((rank, index) => ({ rank, suit, value: index + 2, red: suit === '♥' || suit === '♦' })))
 }
 function shuffle(cards) {
   const a = [...cards]
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]] }
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]] }
   return a
 }
 function combinations(cards, n) {
@@ -168,99 +296,99 @@ function combinations(cards, n) {
   return [...combinations(rest, n - 1).map(x => [first, ...x]), ...combinations(rest, n)]
 }
 function scoreFive(cards) {
-  const counts = Object.values(cards.reduce((m, c) => { m[c.value] = (m[c.value] || 0) + 1; return m }, {})).sort((a,b) => b-a)
-  const vals = [...new Set(cards.map(c => c.value))].sort((a,b) => b-a)
+  const counts = Object.values(cards.reduce((m, c) => { m[c.value] = (m[c.value] || 0) + 1; return m }, {})).sort((a, b) => b - a)
+  const vals = [...new Set(cards.map(c => c.value))].sort((a, b) => b - a)
   if (vals.includes(14)) vals.push(1)
   let straightHigh = null
-  for (let i=0;i<=vals.length-5;i++) if (vals[i]-vals[i+4]===4) { straightHigh=vals[i]; break }
+  for (let i = 0; i <= vals.length - 5; i++) if (vals[i] - vals[i + 4] === 4) { straightHigh = vals[i]; break }
   const flush = cards.every(c => c.suit === cards[0].suit)
   const groups = {}
   cards.forEach(c => { (groups[c.value] ||= []).push(c) })
-  const byCount = Object.entries(groups).sort((a,b) => b[1].length-a[1].length || Number(b[0])-Number(a[0]))
+  const byCount = Object.entries(groups).sort((a, b) => b[1].length - a[1].length || Number(b[0]) - Number(a[0]))
   if (flush && straightHigh) return [8, straightHigh]
-  if (counts[0]===4) return [7, Number(byCount[0][0]), Number(byCount[1][0])]
-  if (counts[0]===3 && counts[1]===2) return [6, Number(byCount[0][0]), Number(byCount[1][0])]
+  if (counts[0] === 4) return [7, Number(byCount[0][0]), Number(byCount[1][0])]
+  if (counts[0] === 3 && counts[1] === 2) return [6, Number(byCount[0][0]), Number(byCount[1][0])]
   if (flush) return [5, ...vals]
   if (straightHigh) return [4, straightHigh]
-  if (counts[0]===3) return [3, Number(byCount[0][0]), ...vals.filter(v=>v!==Number(byCount[0][0]))]
-  if (counts[0]===2 && counts[1]===2) { const pairs=byCount.filter(x=>x[1].length===2).map(x=>Number(x[0])).sort((a,b)=>b-a); return [2,...pairs, ...vals.filter(v=>!pairs.includes(v))] }
-  if (counts[0]===2) { const pair=Number(byCount.find(x=>x[1].length===2)[0]); return [1,pair,...vals.filter(v=>v!==pair)] }
-  return [0,...vals]
+  if (counts[0] === 3) return [3, Number(byCount[0][0]), ...vals.filter(v => v !== Number(byCount[0][0]))]
+  if (counts[0] === 2 && counts[1] === 2) { const pairs = byCount.filter(x => x[1].length === 2).map(x => Number(x[0])).sort((a, b) => b - a); return [2, ...pairs, ...vals.filter(v => !pairs.includes(v))] }
+  if (counts[0] === 2) { const pair = Number(byCount.find(x => x[1].length === 2)[0]); return [1, pair, ...vals.filter(v => v !== pair)] }
+  return [0, ...vals]
 }
-function compareScore(a,b) { for(let i=0;i<Math.max(a.length,b.length);i++){ const d=(a[i]||0)-(b[i]||0); if(d) return d } return 0 }
-function bestScore(cards) { return combinations(cards,5).map(scoreFive).sort(compareScore).pop() || [0,0] }
-function handName(score) { return ['High card','Pair','Two pair','Three of a kind','Straight','Flush','Full house','Four of a kind','Straight flush'][score[0]] }
+function compareScore(a, b) { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d } return 0 }
+function bestScore(cards) { return combinations(cards, 5).map(scoreFive).sort(compareScore).pop() || [0, 0] }
+function handName(score) { return ['High card', 'Pair', 'Two pair', 'Three of a kind', 'Straight', 'Flush', 'Full house', 'Four of a kind', 'Straight flush'][score[0]] }
 function cardText(c) { return `${c.rank}${c.suit}` }
 
-function PokerCard({ card, hidden=false }) {
+function PokerCard({ card, hidden = false }) {
   if (hidden) return <div className="poker-card poker-back"><span>♠</span></div>
   return <div className={`poker-card ${card.red ? 'red' : ''}`}><b>{card.rank}</b><span>{card.suit}</span></div>
 }
 
 function PokerSection() {
   const initial = () => ({
-    players: [{ name:'You', chips:1000, hand:[], folded:false }, { name:'Bot 1', chips:1000, hand:[], folded:false }, { name:'Bot 2', chips:1000, hand:[], folded:false }, { name:'Bot 3', chips:1000, hand:[], folded:false }],
-    deck: [], community: [], pot:0, currentBet:0, street:'preflop', playerBet:0, bets:[0,0,0,0], status:'Start a hand.', message:'', winner:'', gameOver:false
+    players: [{ name: 'You', chips: 1000, hand: [], folded: false }, { name: 'Bot 1', chips: 1000, hand: [], folded: false }, { name: 'Bot 2', chips: 1000, hand: [], folded: false }, { name: 'Bot 3', chips: 1000, hand: [], folded: false }],
+    deck: [], community: [], pot: 0, currentBet: 0, street: 'preflop', playerBet: 0, bets: [0, 0, 0, 0], status: 'Start a hand.', message: '', winner: '', gameOver: false
   })
-  const [game,setGame] = useState(initial)
+  const [game, setGame] = useState(initial)
   const dealHand = () => {
-    let deck=shuffle(makeDeck()), players=game.players.map(p=>({...p,hand:[deck.shift(),deck.shift()],folded:false})), bets=[0,0,0,0]
-    players[1].chips-=5; bets[1]=5; players[2].chips-=5; bets[2]=5
-    setGame({...initial(), players, deck, pot:10, currentBet:5, playerBet:0, bets, street:'preflop', status:'Your turn — call, raise, or fold.', message:'Blinds are $5 / $5. Play money only.'})
+    let deck = shuffle(makeDeck()), players = game.players.map(p => ({ ...p, hand: [deck.shift(), deck.shift()], folded: false })), bets = [0, 0, 0, 0]
+    players[1].chips -= 5; bets[1] = 5; players[2].chips -= 5; bets[2] = 5
+    setGame({ ...initial(), players, deck, pot: 10, currentBet: 5, playerBet: 0, bets, street: 'preflop', status: 'Your turn — call, raise, or fold.', message: 'Blinds are $5 / $5. Play money only.' })
   }
   const finishRound = (state) => {
-    const active=state.players.filter(p=>!p.folded)
-    if(active.length===1){ const idx=state.players.indexOf(active[0]); const ps=state.players.map((p,i)=>i===idx?{...p,chips:p.chips+state.pot}:p); return {...state,players:ps,pot:0,gameOver:true,winner:`${active[0].name} wins $${state.pot} — everyone else folded.`,status:'Hand complete.'} }
-    const scored=active.map(p=>({p,score:bestScore([...p.hand,...state.community])})).sort((a,b)=>compareScore(b.score,a.score))
-    const best=scored[0].score, winners=scored.filter(x=>compareScore(x.score,best)===0).map(x=>x.p)
-    const share=Math.floor(state.pot/winners.length), ps=state.players.map(p=>winners.includes(p)?{...p,chips:p.chips+share}:p)
-    return {...state,players:ps,pot:0,gameOver:true,winner:`${winners.map(w=>w.name).join(' & ')} win $${share}${winners.length>1?' each':''} with ${handName(best)}.`,status:'Hand complete.'}
+    const active = state.players.filter(p => !p.folded)
+    if (active.length === 1) { const idx = state.players.indexOf(active[0]); const ps = state.players.map((p, i) => i === idx ? { ...p, chips: p.chips + state.pot } : p); return { ...state, players: ps, pot: 0, gameOver: true, winner: `${active[0].name} wins $${state.pot} — everyone else folded.`, status: 'Hand complete.' } }
+    const scored = active.map(p => ({ p, score: bestScore([...p.hand, ...state.community]) })).sort((a, b) => compareScore(b.score, a.score))
+    const best = scored[0].score, winners = scored.filter(x => compareScore(x.score, best) === 0).map(x => x.p)
+    const share = Math.floor(state.pot / winners.length), ps = state.players.map(p => winners.includes(p) ? { ...p, chips: p.chips + share } : p)
+    return { ...state, players: ps, pot: 0, gameOver: true, winner: `${winners.map(w => w.name).join(' & ')} win $${share}${winners.length > 1 ? ' each' : ''} with ${handName(best)}.`, status: 'Hand complete.' }
   }
   const revealStreet = (state, street) => {
-    const deck=[...state.deck], community=[...state.community]
-    if(street==='flop') community.push(deck.shift(),deck.shift(),deck.shift())
-    if(street==='turn'||street==='river') community.push(deck.shift())
-    return {...state,deck,community,street,currentBet:0,playerBet:0,bets:[0,0,0,0],status:'Your turn.',message: street==='river'?'Final betting round.':'New cards are on the table.'}
+    const deck = [...state.deck], community = [...state.community]
+    if (street === 'flop') community.push(deck.shift(), deck.shift(), deck.shift())
+    if (street === 'turn' || street === 'river') community.push(deck.shift())
+    return { ...state, deck, community, street, currentBet: 0, playerBet: 0, bets: [0, 0, 0, 0], status: 'Your turn.', message: street === 'river' ? 'Final betting round.' : 'New cards are on the table.' }
   }
   const botActions = (state) => {
-    let s={...state,players:state.players.map(p=>({...p})),bets:[...state.bets]}
-    for(let i=1;i<4;i++){
-      const p=s.players[i]; if(p.folded || p.chips<=0) continue
-      const strength=bestScore([...p.hand,...s.community])[0]
-      const need=s.currentBet-s.bets[i]
-      if(strength===0 && Math.random()<0.38){ p.folded=true; continue }
-      const add=Math.min(need,p.chips)
-      p.chips-=add; s.bets[i]+=add; s.pot+=add
-      if(Math.random()<0.18 && strength>=1 && p.chips>20){ const raise=Math.min(20,p.chips); p.chips-=raise; s.bets[i]+=raise; s.pot+=raise; s.currentBet=Math.max(s.currentBet,s.bets[i]) }
+    let s = { ...state, players: state.players.map(p => ({ ...p })), bets: [...state.bets] }
+    for (let i = 1; i < 4; i++) {
+      const p = s.players[i]; if (p.folded || p.chips <= 0) continue
+      const strength = bestScore([...p.hand, ...s.community])[0]
+      const need = s.currentBet - s.bets[i]
+      if (strength === 0 && Math.random() < 0.38) { p.folded = true; continue }
+      const add = Math.min(need, p.chips)
+      p.chips -= add; s.bets[i] += add; s.pot += add
+      if (Math.random() < 0.18 && strength >= 1 && p.chips > 20) { const raise = Math.min(20, p.chips); p.chips -= raise; s.bets[i] += raise; s.pot += raise; s.currentBet = Math.max(s.currentBet, s.bets[i]) }
     }
     return s
   }
-  const act = (kind) => setGame(prev=>{
-    if(prev.gameOver || !prev.players[0].hand.length) return prev
-    let s={...prev,players:prev.players.map(p=>({...p})),bets:[...prev.bets]}
-    if(kind==='fold'){ s.players[0].folded=true; return finishRound(s) }
-    const need=Math.max(0,s.currentBet-s.bets[0])
-    if(kind==='call' && need>0){ const add=Math.min(need,s.players[0].chips); s.players[0].chips-=add; s.bets[0]+=add; s.pot+=add }
-    if(kind==='check' && need>0) return prev
-    if(kind==='raise'){ const add=Math.min(need+25,s.players[0].chips); s.players[0].chips-=add; s.bets[0]+=add; s.pot+=add; s.currentBet=Math.max(s.currentBet,s.bets[0]) }
-    s=botActions(s)
-    if(s.players.filter(p=>!p.folded).length===1) return finishRound(s)
-    const nextStreet=s.street==='preflop'?'flop':s.street==='flop'?'turn':s.street==='turn'?'river':'showdown'
-    if(nextStreet==='showdown') return finishRound(s)
-    return revealStreet(s,nextStreet)
+  const act = (kind) => setGame(prev => {
+    if (prev.gameOver || !prev.players[0].hand.length) return prev
+    let s = { ...prev, players: prev.players.map(p => ({ ...p })), bets: [...prev.bets] }
+    if (kind === 'fold') { s.players[0].folded = true; return finishRound(s) }
+    const need = Math.max(0, s.currentBet - s.bets[0])
+    if (kind === 'call' && need > 0) { const add = Math.min(need, s.players[0].chips); s.players[0].chips -= add; s.bets[0] += add; s.pot += add }
+    if (kind === 'check' && need > 0) return prev
+    if (kind === 'raise') { const add = Math.min(need + 25, s.players[0].chips); s.players[0].chips -= add; s.bets[0] += add; s.pot += add; s.currentBet = Math.max(s.currentBet, s.bets[0]) }
+    s = botActions(s)
+    if (s.players.filter(p => !p.folded).length === 1) return finishRound(s)
+    const nextStreet = s.street === 'preflop' ? 'flop' : s.street === 'flop' ? 'turn' : s.street === 'turn' ? 'river' : 'showdown'
+    if (nextStreet === 'showdown') return finishRound(s)
+    return revealStreet(s, nextStreet)
   })
-  const hero=game.players[0], canAct=hero?.hand?.length && !game.gameOver
+  const hero = game.players[0], canAct = hero?.hand?.length && !game.gameOver
   return <Card id="poker" eyebrow="03 · Texas Hold’em" title="Play poker in the website" actions={<button className="button secondary" onClick={dealHand}>{game.gameOver || !hero.hand.length ? 'New hand' : 'Restart'}</button>}>
     <p className="widget-help">Play a self-contained Texas Hold’em hand against three bots. Use the action buttons when it is your turn.</p><div className="poker-shell">
       <div className="poker-top"><span>Play money · $1,000 starting stack</span><strong>Pot ${game.pot}</strong></div>
       <div className="poker-table">
-        <div className="poker-opponents">{game.players.slice(1).map((p,i)=><div className={`poker-seat ${p.folded?'folded':''}`} key={p.name}><strong>{p.name}</strong><span>${p.chips}</span><div className="poker-hand-mini"><PokerCard hidden/><PokerCard hidden/></div>{p.folded&&<small>Folded</small>}</div>)}</div>
-        <div className="poker-community"><span className="street-label">{game.street.toUpperCase()}</span><div className="poker-cards">{game.community.map((c,i)=><PokerCard key={i} card={c}/>)}</div>{!game.community.length&&<div className="poker-empty">Community cards</div>}</div>
-        <div className="poker-hero"><div><strong>You</strong><span>${hero.chips}</span></div><div className="poker-cards">{hero.hand.map((c,i)=><PokerCard key={i} card={c}/>)}</div></div>
+        <div className="poker-opponents">{game.players.slice(1).map((p, i) => <div className={`poker-seat ${p.folded ? 'folded' : ''}`} key={p.name}><strong>{p.name}</strong><span>${p.chips}</span><div className="poker-hand-mini"><PokerCard hidden /><PokerCard hidden /></div>{p.folded && <small>Folded</small>}</div>)}</div>
+        <div className="poker-community"><span className="street-label">{game.street.toUpperCase()}</span><div className="poker-cards">{game.community.map((c, i) => <PokerCard key={i} card={c} />)}</div>{!game.community.length && <div className="poker-empty">Community cards</div>}</div>
+        <div className="poker-hero"><div><strong>You</strong><span>${hero.chips}</span></div><div className="poker-cards">{hero.hand.map((c, i) => <PokerCard key={i} card={c} />)}</div></div>
       </div>
       <div className="poker-status"><strong>{game.winner || game.status}</strong><span>{game.message}</span></div>
       {!hero.hand.length && <button className="button primary poker-start" onClick={dealHand}>Deal cards</button>}
-      {canAct && !game.winner && <div className="poker-actions"><button className="button secondary" onClick={()=>act('fold')}>Fold</button><button className="button primary" onClick={()=>act(game.currentBet>game.bets[0]?'call':'check')}>{game.currentBet>game.bets[0]?`Call $${game.currentBet-game.bets[0]}`:'Check'}</button><button className="button primary" onClick={()=>act('raise')}>Raise +$25</button></div>}
+      {canAct && !game.winner && <div className="poker-actions"><button className="button secondary" onClick={() => act('fold')}>Fold</button><button className="button primary" onClick={() => act(game.currentBet > game.bets[0] ? 'call' : 'check')}>{game.currentBet > game.bets[0] ? `Call $${game.currentBet - game.bets[0]}` : 'Check'}</button><button className="button primary" onClick={() => act('raise')}>Raise +$25</button></div>}
       {game.winner && <div className="poker-result">{game.winner}</div>}
       <p className="poker-note">A self-contained Texas Hold’em game. No real money, accounts, or external poker service are used.</p><SourceNote>Built into A Fun Time · no external data.</SourceNote>
     </div>
@@ -286,16 +414,16 @@ function RadioSection() {
   useEffect(() => { load('rock') }, [load])
   const toggleFavorite = (station) => {
     const key = station.stationuuid
-    const next = favorites.some(x => x.id === key) ? favorites.filter(x => x.id !== key) : [...favorites, { id:key, name:station.name, url:station.url_resolved, country:station.countrycode || '' }]
+    const next = favorites.some(x => x.id === key) ? favorites.filter(x => x.id !== key) : [...favorites, { id: key, name: station.name, url: station.url_resolved, country: station.countrycode || '' }]
     setFavorites(next); localStorage.setItem('aft-radio-favorites', JSON.stringify(next))
   }
   const filtered = stations.filter(s => `${s.name} ${s.tags || ''} ${s.countrycode || ''}`.toLowerCase().includes(search.toLowerCase().trim()))
-  const play = (station) => window.dispatchEvent(new CustomEvent('aft:radio-play', { detail: { name:station.name, url:station.url_resolved, country:station.countrycode || station.tags || 'Live station' } }))
+  const play = (station) => window.dispatchEvent(new CustomEvent('aft:radio-play', { detail: { name: station.name, url: station.url_resolved, country: station.countrycode || station.tags || 'Live station' } }))
   return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
     <p className="widget-help">Search stations, filter by genre, save favorites, and keep the mini-player running while you move around the site.</p>
-    <div className="radio-controls"><div className="chip-row">{['rock','pop','jazz','classical','electronic'].map(option => <button key={option} className={`button ${tag===option?'primary':'secondary'}`} onClick={() => { setTag(option); load(option) }} disabled={loading}>{option[0].toUpperCase()+option.slice(1)}</button>)}</div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search stations" aria-label="Search radio stations" /></div>
+    <div className="radio-controls"><div className="chip-row">{['rock', 'pop', 'jazz', 'classical', 'electronic'].map(option => <button key={option} className={`button ${tag === option ? 'primary' : 'secondary'}`} onClick={() => { setTag(option); load(option) }} disabled={loading}>{option[0].toUpperCase() + option.slice(1)}</button>)}</div><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search stations" aria-label="Search radio stations" /></div>
     {favorites.length > 0 && <div className="radio-favorites"><strong>Favorites</strong><div className="list">{favorites.map(f => <div className="list-item" key={f.id}><div><strong>{f.name}</strong><span>{f.country || 'Saved station'}</span></div><button className="button secondary" onClick={() => play(f)}>Play</button></div>)}</div></div>}
-    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{filtered.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '—'} · {station.tags || tag}</span></div><div className="radio-actions"><button className="button primary" onClick={() => play(station)}>Play</button><button className={`button secondary ${favorites.some(f=>f.id===station.stationuuid)?'is-favorite':''}`} onClick={() => toggleFavorite(station)} aria-label="Toggle favorite">{favorites.some(f=>f.id===station.stationuuid)?'Saved':'Save'}</button></div></div>)}{!filtered.length && <EmptyState title="No matching stations.">Try a different search or genre.</EmptyState>}</div>}
+    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{filtered.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '—'} · {station.tags || tag}</span></div><div className="radio-actions"><button className="button primary" onClick={() => play(station)}>Play</button><button className={`button secondary ${favorites.some(f => f.id === station.stationuuid) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(station)} aria-label="Toggle favorite">{favorites.some(f => f.id === station.stationuuid) ? 'Saved' : 'Save'}</button></div></div>)}{!filtered.length && <EmptyState title="No matching stations.">Try a different search or genre.</EmptyState>}</div>}
   </Card>
 }
 function QuoteSection() {
@@ -329,7 +457,7 @@ function LexiconSection() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-                  let candidate = ''
+      let candidate = ''
       try {
         const data = await fetchJson(LEGACY_SOURCES.lexiconFallback)
         candidate = extractLexiconWord(data)
@@ -394,8 +522,8 @@ function SocialSection({ currentUserId }) {
   const draftKey = selected ? `aft-chat-draft:${currentUserId}:${selected.id}` : ''
 
   const loadConnections = useCallback(async () => {
-    const { data, error: e } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url),receiver:profiles!connections_receiver_id_fkey(id,username,created_at,bio,interests,avatar_url)').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).eq('status','accepted')
-    const { data: incoming, error: pendingError } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url)').eq('receiver_id', currentUserId).eq('status','pending')
+    const { data, error: e } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url),receiver:profiles!connections_receiver_id_fkey(id,username,created_at,bio,interests,avatar_url)').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).eq('status', 'accepted')
+    const { data: incoming, error: pendingError } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url)').eq('receiver_id', currentUserId).eq('status', 'pending')
     if (e || pendingError) setError('We could not load your community connections. Try again.')
     else { setConnections(data || []); setPending(incoming || []) }
   }, [currentUserId])
@@ -486,7 +614,7 @@ function SocialSection({ currentUserId }) {
     try {
       const channel = supabase.getChannels().find(ch => ch.topic === `realtime:chat-${currentUserId}-${selected.id}`)
       if (channel) await channel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUserId, typing: Boolean(value.trim()) } })
-    } catch {}
+    } catch { }
   }
 
   const saveEdit = async (id) => {
@@ -508,7 +636,7 @@ function SocialSection({ currentUserId }) {
     const current = messages.find(m => m.id === id)?.is_pinned
     const { data, error: e } = await supabase.from('messages').update({ is_pinned: !current }).eq('id', id).select('id,is_pinned').single()
     if (e) setError('Pinning this message requires the updated chat database schema.')
-    else { setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned:data.is_pinned } : m)); setPinned(prev => data.is_pinned ? [...prev.filter(x=>x.id!==id), messages.find(m=>m.id===id)] : prev.filter(x=>x.id!==id)) }
+    else { setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned: data.is_pinned } : m)); setPinned(prev => data.is_pinned ? [...prev.filter(x => x.id !== id), messages.find(m => m.id === id)] : prev.filter(x => x.id !== id)) }
   }
 
   const reactToMessage = async (messageId, emoji) => {
@@ -587,14 +715,14 @@ function SocialSection({ currentUserId }) {
       <div className="chat-box">
         {selected ? <>
           <div className="chat-header"><div><strong>Chat with {selected.username}</strong>{typing && <span className="typing-indicator">typing…</span>}</div><div className="chat-header-actions"><button className="chat-profile-button" onClick={() => setProfileOpen(v => !v)}>Profile</button><span className="chat-live"><i /> Live</span><button className="chat-close-button" type="button" aria-label="Close chat" onClick={() => { setSelected(null); setMessages([]); setProfileOpen(false) }}>×</button></div></div>
-          {profileOpen && <div className="chat-profile-panel">{selected.avatar_url&&<img className="profile-avatar" src={selected.avatar_url} alt=""/>}<strong>{selected.username}</strong>{selected.bio&&<p>{selected.bio}</p>}{selected.interests&&<span>Interests: {selected.interests}</span>}<span>Joined {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'recently'}</span><small>Private chat · shared media and chat settings.</small><div className="shared-media"><strong>Shared media</strong>{messages.filter(m => m.attachment_url).length ? messages.filter(m => m.attachment_url).slice(-6).map(m => <a key={m.id} href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Attachment'}</a>) : <span>No shared files yet.</span>}</div></div>}
-          {pinned.length>0 && <div className="pinned-strip"><strong>Pinned</strong>{pinned.slice(-3).map(m=><button key={m.id} onClick={()=>document.getElementById(`message-${m.id}`)?.scrollIntoView({behavior:'smooth'})}>{m.body||m.attachment_name}</button>)}</div>}
+          {profileOpen && <div className="chat-profile-panel">{selected.avatar_url && <img className="profile-avatar" src={selected.avatar_url} alt="" />}<strong>{selected.username}</strong>{selected.bio && <p>{selected.bio}</p>}{selected.interests && <span>Interests: {selected.interests}</span>}<span>Joined {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'recently'}</span><small>Private chat · shared media and chat settings.</small><div className="shared-media"><strong>Shared media</strong>{messages.filter(m => m.attachment_url).length ? messages.filter(m => m.attachment_url).slice(-6).map(m => <a key={m.id} href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Attachment'}</a>) : <span>No shared files yet.</span>}</div></div>}
+          {pinned.length > 0 && <div className="pinned-strip"><strong>Pinned</strong>{pinned.slice(-3).map(m => <button key={m.id} onClick={() => document.getElementById(`message-${m.id}`)?.scrollIntoView({ behavior: 'smooth' })}>{m.body || m.attachment_name}</button>)}</div>}
           <div className="chat-tools"><input value={searchMessages} onChange={e => setSearchMessages(e.target.value)} placeholder="Search messages" aria-label="Search messages" /><span>{filteredMessages.length} messages</span></div>
           {chatLoading ? <Loading label="Loading chat…" /> : <div className="messages">{filteredMessages.map((m, i) => {
             const mine = m.sender_id === currentUserId
             const reply = getReply(m.reply_to_id)
             return <div id={`message-${m.id}`} key={m.id} className={`message-wrap ${mine ? 'mine' : ''}`}>
-              {shouldShowTime(i) && <div className="message-time-label">{new Date(m.created_at).toLocaleString([], { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</div>}
+              {shouldShowTime(i) && <div className="message-time-label">{new Date(m.created_at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>}
               <div className={`message ${mine ? 'mine' : ''}`} onDoubleClick={() => { setOpenActions(openActions === m.id ? null : m.id); setReactionPicker(null) }}>
                 {reply && <div className="message-reply"><strong>{reply.sender_id === currentUserId ? 'You' : selected.username}</strong><span>{reply.body}</span></div>}
                 {m.attachment_url ? <div className="attachment-preview">{m.attachment_type?.startsWith('image/') ? <img src={m.attachment_url} alt={m.attachment_name || 'Shared image'} /> : m.attachment_type?.startsWith('video/') ? <video controls src={m.attachment_url} /> : <a href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Open file'}</a>}</div> : <span>{m.body}</span>}
@@ -625,7 +753,7 @@ const SOURCES = {
   dictionary: (q) => `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`,
   justMeme: 'https://justmeme.wtf/api/v1/random',
   imgflip: 'https://api.imgflip.com/get_memes',
-  memesio: (q='funny') => `https://memesio.com/api/free/templates?q=${encodeURIComponent(q)}&pageSize=8&mode=hybrid&mediaType=image`,
+  memesio: (q = 'funny') => `https://memesio.com/api/free/templates?q=${encodeURIComponent(q)}&pageSize=8&mode=hybrid&mediaType=image`,
   memeMaker: 'https://alpha-meme-maker.herokuapp.com/1',
   pokemon: (name) => `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name.toLowerCase())}`,
   trivia: 'https://opentdb.com/api.php?amount=10&category=23&difficulty=medium&type=multiple&encode=base64',
@@ -875,37 +1003,37 @@ function NewsSection() {
   const load = async () => {
     setLoading(true); setError('')
     const results = await Promise.allSettled([fetchJson(SOURCES.spaceflight), fetchJson(SOURCES.florida), fetchJson(SOURCES.noozra)])
-    const space = results[0].status==='fulfilled'?results[0].value:{}; const florida=results[1].status==='fulfilled'?results[1].value:[]; const noozra=results[2].status==='fulfilled'?results[2].value:[]
-    const s=(space.results||[]).map(x=>({title:x.title,url:x.url,date:x.published_at,source:'Spaceflight News',summary:x.summary||x.description,image:x.image_url,author:x.news_site||'Spaceflight News'}))
-    const f=(Array.isArray(florida)?florida:[]).slice(0,8).map(x=>({title:x.title||x.headline||x.text||'Florida Man',url:x.url,date:x.date,source:'Florida Man',summary:x.description||x.text,author:'Florida Man'}))
-    const n=(Array.isArray(noozra)?noozra:(noozra.articles||noozra.data||[])).slice(0,8).map(x=>({title:x.title||x.headline||x.name,url:x.url||x.link,date:x.publishedAt||x.published_at||x.date,source:'Noozra',summary:x.description||x.summary,image:x.image||x.urlToImage,author:x.author||'Noozra'}))
-    const combined=[...s,...f,...n].filter(x=>x.title&&x.url); setItems(combined); if(!combined.length)setError('No stories are available right now.'); setLoading(false)
+    const space = results[0].status === 'fulfilled' ? results[0].value : {}; const florida = results[1].status === 'fulfilled' ? results[1].value : []; const noozra = results[2].status === 'fulfilled' ? results[2].value : []
+    const s = (space.results || []).map(x => ({ title: x.title, url: x.url, date: x.published_at, source: 'Spaceflight News', summary: x.summary || x.description, image: x.image_url, author: x.news_site || 'Spaceflight News' }))
+    const f = (Array.isArray(florida) ? florida : []).slice(0, 8).map(x => ({ title: x.title || x.headline || x.text || 'Florida Man', url: x.url, date: x.date, source: 'Florida Man', summary: x.description || x.text, author: 'Florida Man' }))
+    const n = (Array.isArray(noozra) ? noozra : (noozra.articles || noozra.data || [])).slice(0, 8).map(x => ({ title: x.title || x.headline || x.name, url: x.url || x.link, date: x.publishedAt || x.published_at || x.date, source: 'Noozra', summary: x.description || x.summary, image: x.image || x.urlToImage, author: x.author || 'Noozra' }))
+    const combined = [...s, ...f, ...n].filter(x => x.title && x.url); setItems(combined); if (!combined.length) setError('No stories are available right now.'); setLoading(false)
   }
-  useEffect(()=>{load()},[])
-  const sources=['all',...Array.from(new Set(items.map(x=>x.source)))]
-  const filtered=items.filter(x=>(sourceFilter==='all'||x.source===sourceFilter)&&x.title.toLowerCase().includes(query.toLowerCase().trim())).sort((a,b)=>sort==='newest'?(new Date(b.date||0)-new Date(a.date||0)):a.title.localeCompare(b.title))
-  const saveArticle=(x)=>{const next=saved.some(s=>s.key===x.url)?saved.filter(s=>s.key!==x.url):[...saved,{key:x.url,type:'story',title:x.title,data:x}];setSaved(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
-  const openArticle=(x)=>setArticle(x)
-  const articleIndex=filtered.findIndex(x=>x.url===article?.url)
-  const moveArticle=(delta)=>{const next=filtered[articleIndex+delta];if(next)setArticle(next)}
-  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</button>}>
+  useEffect(() => { load() }, [])
+  const sources = ['all', ...Array.from(new Set(items.map(x => x.source)))]
+  const filtered = items.filter(x => (sourceFilter === 'all' || x.source === sourceFilter) && x.title.toLowerCase().includes(query.toLowerCase().trim())).sort((a, b) => sort === 'newest' ? (new Date(b.date || 0) - new Date(a.date || 0)) : a.title.localeCompare(b.title))
+  const saveArticle = (x) => { const next = saved.some(s => s.key === x.url) ? saved.filter(s => s.key !== x.url) : [...saved, { key: x.url, type: 'story', title: x.title, data: x }]; setSaved(next); localStorage.setItem('aft-saved-items', JSON.stringify(next)) }
+  const openArticle = (x) => setArticle(x)
+  const articleIndex = filtered.findIndex(x => x.url === article?.url)
+  const moveArticle = (delta) => { const next = filtered[articleIndex + delta]; if (next) setArticle(next) }
+  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>}>
     <p className="widget-help">Browse stories by source, search titles, sort them, and save anything you want to return to later.</p>
-    <div className="story-tools"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search stories" aria-label="Search stories"/><select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)} aria-label="Filter stories by source">{sources.map(x=><option key={x} value={x}>{x==='all'?'All sources':x}</option>)}</select><select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort stories"><option value="newest">Newest</option><option value="title">Title</option></select></div>
-    {loading?<Loading label="Loading stories…"/>:error?<ErrorMessage message={error} onRetry={load}/>:article?<div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3><small>{article.author||article.source}{article.date?' · '+new Date(article.date).toLocaleDateString():''} · 3 min read</small></div><button className="button secondary" onClick={()=>setArticle(null)}>Close</button></div>{article.image&&<img className="article-image" src={article.image} alt={article.title}/>}<p className="article-summary">{article.summary||'This source did not provide a summary.'}</p><div className="article-actions"><button className="button secondary" onClick={()=>saveArticle(article)}>{saved.some(s=>s.key===article.url)?'Saved':'Save'}</button><button className="button secondary" onClick={()=>navigator.clipboard?.writeText(article.url)}>Share</button><button className="button secondary" disabled={articleIndex<=0} onClick={()=>moveArticle(-1)}>Previous</button><button className="button secondary" disabled={articleIndex<0||articleIndex>=filtered.length-1} onClick={()=>moveArticle(1)}>Next</button><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read source</a></div></div>:<div className="news-list">{filtered.slice(0,20).map((x,i)=><button className="news-item" key={`${x.url}-${i}`} onClick={()=>openArticle(x)}><div>{x.image&&<img className="news-thumb" src={x.image} alt=""/>}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date?' · '+new Date(x.date).toLocaleDateString():''} · 3 min read</small></span></div><span className="news-read">{saved.some(s=>s.key===x.url)?'Saved':'Read'}</span></button>)}{!filtered.length&&<EmptyState title="No matching stories.">Try another search or filter.</EmptyState>}</div>}
+    <div className="story-tools"><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search stories" aria-label="Search stories" /><select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} aria-label="Filter stories by source">{sources.map(x => <option key={x} value={x}>{x === 'all' ? 'All sources' : x}</option>)}</select><select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort stories"><option value="newest">Newest</option><option value="title">Title</option></select></div>
+    {loading ? <Loading label="Loading stories…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : article ? <div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3><small>{article.author || article.source}{article.date ? ' · ' + new Date(article.date).toLocaleDateString() : ''} · 3 min read</small></div><button className="button secondary" onClick={() => setArticle(null)}>Close</button></div>{article.image && <img className="article-image" src={article.image} alt={article.title} />}<p className="article-summary">{article.summary || 'This source did not provide a summary.'}</p><div className="article-actions"><button className="button secondary" onClick={() => saveArticle(article)}>{saved.some(s => s.key === article.url) ? 'Saved' : 'Save'}</button><button className="button secondary" onClick={() => navigator.clipboard?.writeText(article.url)}>Share</button><button className="button secondary" disabled={articleIndex <= 0} onClick={() => moveArticle(-1)}>Previous</button><button className="button secondary" disabled={articleIndex < 0 || articleIndex >= filtered.length - 1} onClick={() => moveArticle(1)}>Next</button><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read source</a></div></div> : <div className="news-list">{filtered.slice(0, 20).map((x, i) => <button className="news-item" key={`${x.url}-${i}`} onClick={() => openArticle(x)}><div>{x.image && <img className="news-thumb" src={x.image} alt="" />}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date ? ' · ' + new Date(x.date).toLocaleDateString() : ''} · 3 min read</small></span></div><span className="news-read">{saved.some(s => s.key === x.url) ? 'Saved' : 'Read'}</span></button>)}{!filtered.length && <EmptyState title="No matching stories.">Try another search or filter.</EmptyState>}</div>}
   </Card>
 }
 function FoodSection() {
-  const [meals,setMeals]=useState([]),[selected,setSelected]=useState(null),[loading,setLoading]=useState(false),[servings,setServings]=useState(2),[checked,setChecked]=useState({}),[cookingMode,setCookingMode]=useState(false)
-  const [saved,setSaved]=useState(()=>JSON.parse(localStorage.getItem('aft-saved-items')||'[]'))
-  const load=async()=>{setLoading(true);try{const value=await fetchJson(SOURCES.meals);setMeals(value.meals?.[0]?[value.meals[0]]:[]);setSelected(null)}catch{setMeals([])}finally{setLoading(false)}}
-  useEffect(()=>{load()},[])
-  const scaleMeasure=(measure)=>{if(!measure)return '';const match=measure.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/);if(!match)return measure;const value=Number(match[1])*(servings/2);const rounded=Number.isInteger(value)?value:value.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');return `${rounded}${match[2]}`};const ingredients=selected?Array.from({length:20},(_,i)=>i+1).map(i=>({ingredient:selected[`strIngredient${i}`]?.trim(),measure:scaleMeasure(selected[`strMeasure${i}`]?.trim())})).filter(x=>x.ingredient):[]
-  const saveRecipe=()=>{if(!selected)return;const key=`recipe:${selected.idMeal}`;const next=saved.some(s=>s.key===key)?saved.filter(s=>s.key!==key):[...saved,{key,type:'recipe',title:selected.strMeal,data:selected}];setSaved(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
-  const print=()=>window.print()
-  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading?'Loading…':'Refresh recipe'}</button>}>
+  const [meals, setMeals] = useState([]), [selected, setSelected] = useState(null), [loading, setLoading] = useState(false), [servings, setServings] = useState(2), [checked, setChecked] = useState({}), [cookingMode, setCookingMode] = useState(false)
+  const [saved, setSaved] = useState(() => JSON.parse(localStorage.getItem('aft-saved-items') || '[]'))
+  const load = async () => { setLoading(true); try { const value = await fetchJson(SOURCES.meals); setMeals(value.meals?.[0] ? [value.meals[0]] : []); setSelected(null) } catch { setMeals([]) } finally { setLoading(false) } }
+  useEffect(() => { load() }, [])
+  const scaleMeasure = (measure) => { if (!measure) return ''; const match = measure.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/); if (!match) return measure; const value = Number(match[1]) * (servings / 2); const rounded = Number.isInteger(value) ? value : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); return `${rounded}${match[2]}` }; const ingredients = selected ? Array.from({ length: 20 }, (_, i) => i + 1).map(i => ({ ingredient: selected[`strIngredient${i}`]?.trim(), measure: scaleMeasure(selected[`strMeasure${i}`]?.trim()) })).filter(x => x.ingredient) : []
+  const saveRecipe = () => { if (!selected) return; const key = `recipe:${selected.idMeal}`; const next = saved.some(s => s.key === key) ? saved.filter(s => s.key !== key) : [...saved, { key, type: 'recipe', title: selected.strMeal, data: selected }]; setSaved(next); localStorage.setItem('aft-saved-items', JSON.stringify(next)) }
+  const print = () => window.print()
+  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh recipe'}</button>}>
     <p className="widget-help">Open a recipe, scale it to your serving size, check ingredients as you go, or switch to cooking mode.</p>
-    {loading?<Loading label="Finding a recipe…"/>:<div className="food-grid">{meals.map(meal=><button type="button" className="food-card" key={meal.idMeal} onClick={()=>{setSelected(meal);setServings(2);setChecked({})}}><img src={meal.strMealThumb} alt={meal.strMeal}/><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} · {meal.strArea}</small></span></button>)}</div>}
-    {selected&&<div className={`recipe-panel ${cookingMode?'cooking-mode':''}`}><div className="recipe-head"><div><p className="eyebrow">RECIPE</p><h3>{selected.strMeal}</h3><div className="recipe-meta"><span>Difficulty: source-dependent</span><span>Time: source-dependent</span><span>Servings <input className="servings-input" type="number" min="1" max="20" value={servings} onChange={e=>setServings(Math.max(1,Number(e.target.value)||1))}/></span></div></div><div className="recipe-actions"><button className="button secondary" onClick={()=>setCookingMode(v=>!v)}>{cookingMode?'Exit cooking mode':'Cooking mode'}</button><button className="button secondary" onClick={print}>Print</button><button className="button secondary" onClick={saveRecipe}>{saved.some(s=>s.key===`recipe:${selected.idMeal}`)?'Saved':'Save'}</button><button className="button secondary" onClick={()=>setSelected(null)}>Close</button></div></div><button className="jump-recipe" onClick={()=>document.getElementById('ingredients')?.scrollIntoView({behavior:'smooth'})}>Jump to ingredients</button><div className="recipe-layout"><img className="recipe-image" src={selected.strMealThumb} alt={selected.strMeal}/><div><h4 id="ingredients">Ingredients</h4><ul className="ingredients">{ingredients.map((x,i)=><li key={i}><label className="ingredient-check"><input type="checkbox" checked={!!checked[i]} onChange={e=>setChecked(v=>({...v,[i]:e.target.checked}))}/><span>{x.measure?`${x.measure} `:''}{x.ingredient}</span></label></li>)}</ul></div></div><h4>Instructions</h4><p className="recipe-instructions">{selected.strInstructions}</p><p className="source-note">Preparation/cooking time, dietary labels, allergens, and difficulty are shown only when the source supplies reliable values.</p></div>}
+    {loading ? <Loading label="Finding a recipe…" /> : <div className="food-grid">{meals.map(meal => <button type="button" className="food-card" key={meal.idMeal} onClick={() => { setSelected(meal); setServings(2); setChecked({}) }}><img src={meal.strMealThumb} alt={meal.strMeal} /><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} · {meal.strArea}</small></span></button>)}</div>}
+    {selected && <div className={`recipe-panel ${cookingMode ? 'cooking-mode' : ''}`}><div className="recipe-head"><div><p className="eyebrow">RECIPE</p><h3>{selected.strMeal}</h3><div className="recipe-meta"><span>Difficulty: source-dependent</span><span>Time: source-dependent</span><span>Servings <input className="servings-input" type="number" min="1" max="20" value={servings} onChange={e => setServings(Math.max(1, Number(e.target.value) || 1))} /></span></div></div><div className="recipe-actions"><button className="button secondary" onClick={() => setCookingMode(v => !v)}>{cookingMode ? 'Exit cooking mode' : 'Cooking mode'}</button><button className="button secondary" onClick={print}>Print</button><button className="button secondary" onClick={saveRecipe}>{saved.some(s => s.key === `recipe:${selected.idMeal}`) ? 'Saved' : 'Save'}</button><button className="button secondary" onClick={() => setSelected(null)}>Close</button></div></div><button className="jump-recipe" onClick={() => document.getElementById('ingredients')?.scrollIntoView({ behavior: 'smooth' })}>Jump to ingredients</button><div className="recipe-layout"><img className="recipe-image" src={selected.strMealThumb} alt={selected.strMeal} /><div><h4 id="ingredients">Ingredients</h4><ul className="ingredients">{ingredients.map((x, i) => <li key={i}><label className="ingredient-check"><input type="checkbox" checked={!!checked[i]} onChange={e => setChecked(v => ({ ...v, [i]: e.target.checked }))} /><span>{x.measure ? `${x.measure} ` : ''}{x.ingredient}</span></label></li>)}</ul></div></div><h4>Instructions</h4><p className="recipe-instructions">{selected.strInstructions}</p><p className="source-note">Preparation/cooking time, dietary labels, allergens, and difficulty are shown only when the source supplies reliable values.</p></div>}
   </Card>
 }
 function FunOdditiesSection() {
@@ -976,16 +1104,16 @@ function NotFoundPage() {
 }
 
 function SavedPage() {
-  const [items,setItems]=useState(()=>JSON.parse(localStorage.getItem('aft-saved-items')||'[]'))
-  const remove=(key)=>{const next=items.filter(x=>x.key!==key);setItems(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
-  return <Card eyebrow="SAVED" title="Saved items"><p className="widget-help">Stories and recipes you save stay on this device.</p>{!items.length?<EmptyState title="Nothing saved yet.">Use Save on a story or recipe to keep it here.</EmptyState>:<div className="saved-list">{items.map(item=><article className="saved-item" key={item.key}><div><span className="eyebrow">{item.type}</span><h3>{item.title}</h3><p>{item.type==='story'?(item.data.summary||'Saved story'):(item.data.strCategory||'Saved recipe')}</p></div><div className="actions"><button className="button secondary" onClick={()=>remove(item.key)}>Remove</button>{item.type==='story'&&<a className="button primary" href={`#/news`}>Open stories</a>}{item.type==='recipe'&&<a className="button primary" href={`#/food`}>Open recipes</a>}</div></article>)}</div>}</Card>
+  const [items, setItems] = useState(() => JSON.parse(localStorage.getItem('aft-saved-items') || '[]'))
+  const remove = (key) => { const next = items.filter(x => x.key !== key); setItems(next); localStorage.setItem('aft-saved-items', JSON.stringify(next)) }
+  return <Card eyebrow="SAVED" title="Saved items"><p className="widget-help">Stories and recipes you save stay on this device.</p>{!items.length ? <EmptyState title="Nothing saved yet.">Use Save on a story or recipe to keep it here.</EmptyState> : <div className="saved-list">{items.map(item => <article className="saved-item" key={item.key}><div><span className="eyebrow">{item.type}</span><h3>{item.title}</h3><p>{item.type === 'story' ? (item.data.summary || 'Saved story') : (item.data.strCategory || 'Saved recipe')}</p></div><div className="actions"><button className="button secondary" onClick={() => remove(item.key)}>Remove</button>{item.type === 'story' && <a className="button primary" href={`#/news`}>Open stories</a>}{item.type === 'recipe' && <a className="button primary" href={`#/food`}>Open recipes</a>}</div></article>)}</div>}</Card>
 }
 
 function SettingsPage({ currentUserId }) {
-  const [profile,setProfile]=useState({username:'',bio:'',interests:'',avatar_url:''}); const [saving,setSaving]=useState(false); const [message,setMessage]=useState('')
-  useEffect(()=>{supabase.from('profiles').select('username,bio,interests,avatar_url').eq('id',currentUserId).single().then(({data})=>{if(data)setProfile({username:data.username||'',bio:data.bio||'',interests:data.interests||'',avatar_url:data.avatar_url||''})})},[currentUserId])
-  const save=async(e)=>{e.preventDefault();setSaving(true);setMessage('');const {error}=await supabase.from('profiles').update({bio:profile.bio.trim(),interests:profile.interests.trim(),avatar_url:profile.avatar_url.trim()||null}).eq('id',currentUserId);setMessage(error?'Could not save profile details. Run the updated schema first.':'Profile saved.');setSaving(false)}
-  return <Card eyebrow="SETTINGS" title="Profile & settings"><form className="settings-form" onSubmit={save}><label>Username<input value={profile.username} disabled/></label><label>Bio<textarea value={profile.bio} onChange={e=>setProfile({...profile,bio:e.target.value})} maxLength={240} placeholder="A short description about you."/></label><label>Interests<input value={profile.interests} onChange={e=>setProfile({...profile,interests:e.target.value})} placeholder="music, games, cricket"/></label><label>Avatar image URL<input value={profile.avatar_url} onChange={e=>setProfile({...profile,avatar_url:e.target.value})} placeholder="https://…"/></label>{message&&<p className="status" role="status">{message}</p>}<button className="button primary" disabled={saving}>{saving?'Saving…':'Save profile'}</button></form></Card>
+  const [profile, setProfile] = useState({ username: '', bio: '', interests: '', avatar_url: '' }); const [saving, setSaving] = useState(false); const [message, setMessage] = useState('')
+  useEffect(() => { supabase.from('profiles').select('username,bio,interests,avatar_url').eq('id', currentUserId).single().then(({ data }) => { if (data) setProfile({ username: data.username || '', bio: data.bio || '', interests: data.interests || '', avatar_url: data.avatar_url || '' }) }) }, [currentUserId])
+  const save = async (e) => { e.preventDefault(); setSaving(true); setMessage(''); const { error } = await supabase.from('profiles').update({ bio: profile.bio.trim(), interests: profile.interests.trim(), avatar_url: profile.avatar_url.trim() || null }).eq('id', currentUserId); setMessage(error ? 'Could not save profile details. Run the updated schema first.' : 'Profile saved.'); setSaving(false) }
+  return <Card eyebrow="SETTINGS" title="Profile & settings"><form className="settings-form" onSubmit={save}><label>Username<input value={profile.username} disabled /></label><label>Bio<textarea value={profile.bio} onChange={e => setProfile({ ...profile, bio: e.target.value })} maxLength={240} placeholder="A short description about you." /></label><label>Interests<input value={profile.interests} onChange={e => setProfile({ ...profile, interests: e.target.value })} placeholder="music, games, cricket" /></label><label>Avatar image URL<input value={profile.avatar_url} onChange={e => setProfile({ ...profile, avatar_url: e.target.value })} placeholder="https://…" /></label>{message && <p className="status" role="status">{message}</p>}<button className="button primary" disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</button></form></Card>
 }
 
 function App() {
@@ -1063,7 +1191,7 @@ function App() {
       </aside>
 
       <main className="ps2-main">
-          {page}
+        {page}
       </main>
     </div>
 
