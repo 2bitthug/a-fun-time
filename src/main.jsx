@@ -1,17 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 
 const LEGACY_SOURCES = {
   pokemon: (name) => `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name.toLowerCase())}`,
-  radio: 'https://de1.api.radio-browser.info/json/stations/search?limit=8&hidebroken=true&order=clickcount&reverse=true&tag=rock',
+  radio: (tag = 'rock') => `https://de1.api.radio-browser.info/json/stations/search?limit=8&hidebroken=true&order=clickcount&reverse=true&tag=${encodeURIComponent(tag)}`,
   quote: 'https://dummyjson.com/quotes/random',
   lexicon: 'https://randomlexicon.com/api',
   lexiconFallback: 'https://random-word-api.herokuapp.com/word?number=1&diff=2',
   lexiconFallback2: 'https://random-words-api.vercel.app/word',
   reddit: 'https://tradestie.com/v1/apps/reddit',
-  meme: 'https://justmeme.wtf/api/v1/random',
 }
 
 async function fetchJson(url, options = {}) {
@@ -268,14 +267,37 @@ function PokerSection() {
   </Card>
 }
 function RadioSection() {
-  const [stations, setStations] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState('')
-  const load = useCallback(async () => { setLoading(true); setError(''); try { setStations(await fetchJson(LEGACY_SOURCES.radio)) } catch (e) { setError(e.message || 'Unable to load radio stations.') } finally { setLoading(false) } }, [])
-  useEffect(() => { load() }, [load])
-  return <Card id="radio" eyebrow="04 · Radio Browser" title="Live radio directory" actions={<button className="button secondary" onClick={load} disabled={loading}>Refresh</button>}>
-    {loading ? <Loading label="Finding radio stations…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : stations.length ? <><p className="widget-help">Browse the current top rock stations returned by Radio Browser and press play on any station.</p><div className="list">{stations.map((s) => <div className="list-item" key={s.stationuuid}><div><strong>{s.name}</strong><span>{s.countrycode || '—'} · {s.tags || 'Radio'}</span></div>{s.url_resolved ? <audio controls preload="none" src={s.url_resolved} aria-label={`Play ${s.name}`} /> : <span className="muted-inline">No stream</span>}</div>)}</div><SourceNote>Radio Browser · station directory results fetched on refresh.</SourceNote></> : <EmptyState title="No stations were returned.">Try Refresh to search again.</EmptyState>}
+  const [tag, setTag] = useState('rock')
+  const [search, setSearch] = useState('')
+  const [stations, setStations] = useState([])
+  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('aft-radio-favorites') || '[]'))
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const load = useCallback(async (nextTag = tag) => {
+    setLoading(true); setError('')
+    try {
+      const data = await fetchJson(LEGACY_SOURCES.radio(nextTag))
+      const usable = (Array.isArray(data) ? data : []).filter(s => s?.url_resolved).slice(0, 20)
+      setStations(usable)
+      if (!usable.length) setError('No playable stations were found. Try another genre or search.')
+    } catch { setStations([]); setError('The radio directory is temporarily unavailable. Try Refresh again.') }
+    finally { setLoading(false) }
+  }, [tag])
+  useEffect(() => { load('rock') }, [load])
+  const toggleFavorite = (station) => {
+    const key = station.stationuuid
+    const next = favorites.some(x => x.id === key) ? favorites.filter(x => x.id !== key) : [...favorites, { id:key, name:station.name, url:station.url_resolved, country:station.countrycode || '' }]
+    setFavorites(next); localStorage.setItem('aft-radio-favorites', JSON.stringify(next))
+  }
+  const filtered = stations.filter(s => `${s.name} ${s.tags || ''} ${s.countrycode || ''}`.toLowerCase().includes(search.toLowerCase().trim()))
+  const play = (station) => window.dispatchEvent(new CustomEvent('aft:radio-play', { detail: { name:station.name, url:station.url_resolved, country:station.countrycode || station.tags || 'Live station' } }))
+  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
+    <p className="widget-help">Search stations, filter by genre, save favorites, and keep the mini-player running while you move around the site.</p>
+    <div className="radio-controls"><div className="chip-row">{['rock','pop','jazz','classical','electronic'].map(option => <button key={option} className={`button ${tag===option?'primary':'secondary'}`} onClick={() => { setTag(option); load(option) }} disabled={loading}>{option[0].toUpperCase()+option.slice(1)}</button>)}</div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search stations" aria-label="Search radio stations" /></div>
+    {favorites.length > 0 && <div className="radio-favorites"><strong>Favorites</strong><div className="list">{favorites.map(f => <div className="list-item" key={f.id}><div><strong>{f.name}</strong><span>{f.country || 'Saved station'}</span></div><button className="button secondary" onClick={() => play(f)}>Play</button></div>)}</div></div>}
+    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{filtered.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '—'} · {station.tags || tag}</span></div><div className="radio-actions"><button className="button primary" onClick={() => play(station)}>Play</button><button className={`button secondary ${favorites.some(f=>f.id===station.stationuuid)?'is-favorite':''}`} onClick={() => toggleFavorite(station)} aria-label="Toggle favorite">{favorites.some(f=>f.id===station.stationuuid)?'Saved':'Save'}</button></div></div>)}{!filtered.length && <EmptyState title="No matching stations.">Try a different search or genre.</EmptyState>}</div>}
   </Card>
 }
-
 function QuoteSection() {
   const [quote, setQuote] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('')
   const load = useCallback(async () => {
@@ -356,10 +378,24 @@ function SocialSection({ currentUserId }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [chatLoading, setChatLoading] = useState(false)
+  const [typing, setTyping] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editingText, setEditingText] = useState('')
+  const [replyTo, setReplyTo] = useState(null)
+  const [openActions, setOpenActions] = useState(null)
+  const [reactionPicker, setReactionPicker] = useState(null)
+  const [searchMessages, setSearchMessages] = useState('')
+  const [drafts, setDrafts] = useState({})
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [pinned, setPinned] = useState([])
+
+  const reactionChoices = ['👍', '❤️', '😂', '😮', '😢']
+  const draftKey = selected ? `aft-chat-draft:${currentUserId}:${selected.id}` : ''
 
   const loadConnections = useCallback(async () => {
-    const { data, error: e } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username),receiver:profiles!connections_receiver_id_fkey(id,username)').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).eq('status','accepted')
-    const { data: incoming, error: pendingError } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username)').eq('receiver_id', currentUserId).eq('status','pending')
+    const { data, error: e } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url),receiver:profiles!connections_receiver_id_fkey(id,username,created_at,bio,interests,avatar_url)').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`).eq('status','accepted')
+    const { data: incoming, error: pendingError } = await supabase.from('connections').select('id,sender_id,receiver_id,status,sender:profiles!connections_sender_id_fkey(id,username,created_at,bio,interests,avatar_url)').eq('receiver_id', currentUserId).eq('status','pending')
     if (e || pendingError) setError('We could not load your community connections. Try again.')
     else { setConnections(data || []); setPending(incoming || []) }
   }, [currentUserId])
@@ -369,10 +405,10 @@ function SocialSection({ currentUserId }) {
     try {
       const term = query.trim().toLowerCase()
       if (term.length < 2) { setUsers([]); setLoading(false); return }
-      const { data, error: e } = await supabase.from('profiles').select('id,username,created_at').ilike('username', `%${term}%`).neq('id', currentUserId).limit(20)
+      const { data, error: e } = await supabase.from('profiles').select('id,username,created_at,bio,interests,avatar_url').ilike('username', `%${term}%`).neq('id', currentUserId).limit(20)
       if (e) throw e
       setUsers(data || [])
-    } catch (e) { setError('We could not search the community right now. Check your connection and try again.') }
+    } catch { setError('We could not search the community right now. Check your connection and try again.') }
     finally { setLoading(false) }
   }
 
@@ -389,32 +425,155 @@ function SocialSection({ currentUserId }) {
     else setError('Connection request sent.')
   }
 
+  const markMessagesRead = useCallback(async (otherId, ids) => {
+    if (!ids.length) return
+    await supabase.from('messages').update({ delivery_status: 'read', read_at: new Date().toISOString() }).in('id', ids).eq('sender_id', otherId).eq('receiver_id', currentUserId)
+  }, [currentUserId])
+
   const openChat = async (other) => {
-    setSelected(other); setError('')
-    const { data, error: e } = await supabase.from('messages').select('id,sender_id,receiver_id,body,created_at').or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${currentUserId})`).order('created_at', { ascending: true }).limit(100)
-    if (e) setError('We could not load this chat. Try opening it again.')
-    else setMessages(data || [])
+    setSelected(other); setError(''); setChatLoading(true); setEditingId(null); setReplyTo(null); setOpenActions(null); setReactionPicker(null); setProfileOpen(false)
+    const savedDraft = localStorage.getItem(`aft-chat-draft:${currentUserId}:${other.id}`) || ''
+    setMessage(savedDraft)
+    const coreSelect = 'id,sender_id,receiver_id,body,created_at'
+    const advancedSelect = `${coreSelect},delivery_status,delivered_at,read_at,edited_at,reply_to_id,attachment_url,attachment_name,attachment_type,is_pinned`
+    let data = null
+    let e = null
+    const advanced = await supabase.from('messages').select(advancedSelect).or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${currentUserId})`).order('created_at', { ascending: true }).limit(300)
+    if (!advanced.error) data = advanced.data || []
+    else {
+      const core = await supabase.from('messages').select(coreSelect).or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${other.id}),and(sender_id.eq.${other.id},receiver_id.eq.${currentUserId})`).order('created_at', { ascending: true }).limit(300)
+      data = core.data || []
+      e = core.error
+    }
+    if (e) setError('We could not load this chat. Please check that your chat database setup is up to date.')
+    else {
+      const baseMessages = data || []
+      const ids = baseMessages.map(m => m.id)
+      const { data: reactions } = ids.length ? await supabase.from('message_reactions').select('message_id,user_id,emoji').in('message_id', ids) : { data: [] }
+      const reactionMap = new Map((reactions || []).map(r => [r.message_id, r]))
+      setMessages(baseMessages.map(m => ({ delivery_status: 'sent', ...m, myReaction: reactionMap.get(m.id)?.user_id === currentUserId ? reactionMap.get(m.id).emoji : null })))
+      setPinned(baseMessages.filter(m => m.is_pinned))
+      const unread = baseMessages.filter(m => m.receiver_id === currentUserId && m.delivery_status !== 'read').map(m => m.id)
+      await markMessagesRead(other.id, unread)
+      if (unread.length) setMessages(prev => prev.map(m => unread.includes(m.id) ? { ...m, delivery_status: 'read', read_at: new Date().toISOString() } : m))
+    }
+    setChatLoading(false)
   }
 
   const sendMessage = async (event) => {
     event.preventDefault()
     if (!selected || !message.trim()) return
-    const body = message.trim(); setMessage('')
-    const { error: e } = await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: selected.id, body })
-    if (e) setError('Your message could not be sent. Check your connection and try again.')
+    const body = message.trim()
+    const replyId = replyTo?.id || null
+    setMessage(''); localStorage.removeItem(draftKey); setReplyTo(null)
+    let inserted = null
+    let e = null
+    const advancedInsert = await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: selected.id, body, delivery_status: 'sent', reply_to_id: replyId }).select('id,sender_id,receiver_id,body,created_at,delivery_status,delivered_at,read_at,edited_at,reply_to_id,attachment_url,attachment_name,attachment_type').single()
+    if (!advancedInsert.error) inserted = advancedInsert.data
+    else {
+      const coreInsert = await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: selected.id, body }).select('id,sender_id,receiver_id,body,created_at').single()
+      inserted = coreInsert.data
+      e = coreInsert.error
+    }
+    if (e) { setError('Your message could not be sent. Please check that you are still connected to this friend.'); setMessage(body) }
+    else if (inserted) setMessages(prev => prev.some(m => m.id === inserted.id) ? prev : [...prev, { delivery_status: 'sent', ...inserted }])
+  }
+
+  const updateTyping = async (value) => {
+    setMessage(value)
+    if (!selected) return
+    localStorage.setItem(draftKey, value)
+    try {
+      const channel = supabase.getChannels().find(ch => ch.topic === `realtime:chat-${currentUserId}-${selected.id}`)
+      if (channel) await channel.send({ type: 'broadcast', event: 'typing', payload: { userId: currentUserId, typing: Boolean(value.trim()) } })
+    } catch {}
+  }
+
+  const saveEdit = async (id) => {
+    const body = editingText.trim()
+    if (!body) return
+    const { data, error: e } = await supabase.from('messages').update({ body, edited_at: new Date().toISOString() }).eq('id', id).eq('sender_id', currentUserId).select('id,body,edited_at').single()
+    if (e) setError('That message could not be edited.')
+    else { setMessages(prev => prev.map(m => m.id === id ? { ...m, ...data } : m)); setEditingId(null); setEditingText('') }
+  }
+
+  const deleteMessage = async (id) => {
+    if (!window.confirm('Delete this message?')) return
+    const { error: e } = await supabase.from('messages').delete().eq('id', id).eq('sender_id', currentUserId)
+    if (e) setError('That message could not be deleted.')
+    else setMessages(prev => prev.filter(m => m.id !== id))
+  }
+
+  const pinMessage = async (id) => {
+    const current = messages.find(m => m.id === id)?.is_pinned
+    const { data, error: e } = await supabase.from('messages').update({ is_pinned: !current }).eq('id', id).select('id,is_pinned').single()
+    if (e) setError('Pinning this message requires the updated chat database schema.')
+    else { setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned:data.is_pinned } : m)); setPinned(prev => data.is_pinned ? [...prev.filter(x=>x.id!==id), messages.find(m=>m.id===id)] : prev.filter(x=>x.id!==id)) }
+  }
+
+  const reactToMessage = async (messageId, emoji) => {
+    const { data, error: e } = await supabase.from('message_reactions').upsert({ message_id: messageId, user_id: currentUserId, emoji }, { onConflict: 'message_id,user_id' }).select('message_id,user_id,emoji').single()
+    if (e) setError('Reaction could not be saved.')
+    else {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, myReaction: data.emoji } : m))
+      setReactionPicker(null)
+    }
+  }
+
+  const uploadAttachment = async (file) => {
+    if (!selected || !file) return
+    if (!['image/', 'video/'].some(prefix => file.type.startsWith(prefix)) && file.size > 20 * 1024 * 1024) { setError('Files are limited to 20 MB.'); return }
+    if (file.size > 20 * 1024 * 1024) { setError('Files are limited to 20 MB.'); return }
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${currentUserId}/${Date.now()}-${safeName}`
+    const { error: uploadError } = await supabase.storage.from('chat-media').upload(path, file, { upsert: false })
+    if (uploadError) { setError('The file could not be uploaded. Run the updated Supabase schema first.'); return }
+    const { data: publicData } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const { data: inserted, error: e } = await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: selected.id, body: `Attachment: ${file.name}`, attachment_url: publicData.publicUrl, attachment_name: file.name, attachment_type: file.type, delivery_status: 'sent' }).select('id,sender_id,receiver_id,body,created_at,delivery_status,attachment_url,attachment_name,attachment_type').single()
+    if (e) setError('The file was uploaded but the message could not be created.')
+    else if (inserted) setMessages(prev => [...prev, inserted])
   }
 
   useEffect(() => { loadConnections() }, [loadConnections])
   useEffect(() => {
     if (!selected) return
-    const channel = supabase.channel(`chat-${currentUserId}-${selected.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, payload => {
-      if (payload.new.sender_id === selected.id) setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
-    }).subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [currentUserId, selected])
+    const channel = supabase.channel(`chat-${currentUserId}-${selected.id}`, { config: { presence: { key: currentUserId } } })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, async payload => {
+        if (payload.new.sender_id === selected.id) {
+          setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, { ...payload.new, delivery_status: 'delivered' }])
+          await supabase.from('messages').update({ delivery_status: 'read', delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }).eq('id', payload.new.id).eq('receiver_id', currentUserId)
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m)))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => setMessages(prev => prev.filter(m => m.id !== payload.old.id)))
+      .on('broadcast', { event: 'typing' }, payload => { if (payload.payload?.userId === selected.id) setTyping(Boolean(payload.payload.typing)) })
+      .subscribe(async status => { if (status === 'SUBSCRIBED') await channel.track({ online: true }) })
+    return () => { supabase.removeChannel(channel); setTyping(false) }
+  }, [currentUserId, selected, markMessagesRead])
+
+  useEffect(() => {
+    if (!selected) return
+    const handler = () => { const saved = localStorage.getItem(draftKey) || ''; setDrafts(prev => ({ ...prev, [draftKey]: saved })) }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [selected, draftKey])
+
+  const filteredMessages = useMemo(() => {
+    const q = searchMessages.trim().toLowerCase()
+    return q ? messages.filter(m => m.body?.toLowerCase().includes(q) || m.attachment_name?.toLowerCase().includes(q)) : messages
+  }, [messages, searchMessages])
+
+  const getReply = (id) => messages.find(m => m.id === id)
+  const shouldShowTime = (index) => {
+    if (index === 0) return true
+    const current = new Date(filteredMessages[index].created_at).getTime()
+    const previous = new Date(filteredMessages[index - 1].created_at).getTime()
+    return current - previous > 5 * 60 * 1000
+  }
 
   return <Card id="community" eyebrow="10 · Community" title="Find users & chat">
-    <p className="widget-help">Search for another A Fun Time username, send a connection request, accept requests, and chat privately with accepted connections. Connecting is only for the community features; it does not connect an external account.</p><form className="input-row" onSubmit={searchUsers}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a username" aria-label="Search community usernames" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button></form>
+    <p className="widget-help">Search usernames, connect with people, and use private chat. Double-click a message for quick actions.</p>
+    <form className="input-row" onSubmit={searchUsers}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a username" aria-label="Search community usernames" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button></form>
     {error && <p className="status notice" role="status" aria-live="polite">{error}</p>}
     <div className="social-layout">
       <div>
@@ -426,21 +585,33 @@ function SocialSection({ currentUserId }) {
         <div className="user-list">{connections.map(c => { const other = c.sender_id === currentUserId ? c.receiver : c.sender; return <button className={`user-row chat-select ${selected?.id === other.id ? 'selected' : ''}`} key={c.id} onClick={() => openChat(other)}><div><strong>{other.username}</strong><span>Connected · Open chat</span></div><span>›</span></button> })}{!connections.length && <EmptyState title="No connections yet.">Search for someone above and send a connection request to start building your community.</EmptyState>}</div>
       </div>
       <div className="chat-box">
-        {selected ? <><div className="chat-header"><strong>Chat with {selected.username}</strong><span>Live</span></div><div className="messages">{messages.map(m => <div key={m.id} className={`message ${m.sender_id === currentUserId ? 'mine' : ''}`}>{m.body}<small>{new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></div>)}{!messages.length && <EmptyState title="No messages yet.">Say hello to start the conversation.</EmptyState>}</div><form className="chat-compose" onSubmit={sendMessage}><input value={message} onChange={e => setMessage(e.target.value)} placeholder="Write a message…" aria-label="Message" /><button className="button primary">Send</button></form></> : <div className="chat-empty"><strong>Select a connection</strong><p>Choose an accepted connection to start a private chat.</p></div>}
+        {selected ? <>
+          <div className="chat-header"><div><strong>Chat with {selected.username}</strong>{typing && <span className="typing-indicator">typing…</span>}</div><div className="chat-header-actions"><button className="chat-profile-button" onClick={() => setProfileOpen(v => !v)}>Profile</button><span className="chat-live"><i /> Live</span><button className="chat-close-button" type="button" aria-label="Close chat" onClick={() => { setSelected(null); setMessages([]); setProfileOpen(false) }}>×</button></div></div>
+          {profileOpen && <div className="chat-profile-panel">{selected.avatar_url&&<img className="profile-avatar" src={selected.avatar_url} alt=""/>}<strong>{selected.username}</strong>{selected.bio&&<p>{selected.bio}</p>}{selected.interests&&<span>Interests: {selected.interests}</span>}<span>Joined {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'recently'}</span><small>Private chat · shared media and chat settings.</small><div className="shared-media"><strong>Shared media</strong>{messages.filter(m => m.attachment_url).length ? messages.filter(m => m.attachment_url).slice(-6).map(m => <a key={m.id} href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Attachment'}</a>) : <span>No shared files yet.</span>}</div></div>}
+          {pinned.length>0 && <div className="pinned-strip"><strong>Pinned</strong>{pinned.slice(-3).map(m=><button key={m.id} onClick={()=>document.getElementById(`message-${m.id}`)?.scrollIntoView({behavior:'smooth'})}>{m.body||m.attachment_name}</button>)}</div>}
+          <div className="chat-tools"><input value={searchMessages} onChange={e => setSearchMessages(e.target.value)} placeholder="Search messages" aria-label="Search messages" /><span>{filteredMessages.length} messages</span></div>
+          {chatLoading ? <Loading label="Loading chat…" /> : <div className="messages">{filteredMessages.map((m, i) => {
+            const mine = m.sender_id === currentUserId
+            const reply = getReply(m.reply_to_id)
+            return <div id={`message-${m.id}`} key={m.id} className={`message-wrap ${mine ? 'mine' : ''}`}>
+              {shouldShowTime(i) && <div className="message-time-label">{new Date(m.created_at).toLocaleString([], { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</div>}
+              <div className={`message ${mine ? 'mine' : ''}`} onDoubleClick={() => { setOpenActions(openActions === m.id ? null : m.id); setReactionPicker(null) }}>
+                {reply && <div className="message-reply"><strong>{reply.sender_id === currentUserId ? 'You' : selected.username}</strong><span>{reply.body}</span></div>}
+                {m.attachment_url ? <div className="attachment-preview">{m.attachment_type?.startsWith('image/') ? <img src={m.attachment_url} alt={m.attachment_name || 'Shared image'} /> : m.attachment_type?.startsWith('video/') ? <video controls src={m.attachment_url} /> : <a href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Open file'}</a>}</div> : <span>{m.body}</span>}
+                {m.edited_at && <em className="edited-label">edited</em>}
+                <div className="message-meta">{m.delivery_status && mine && <span>{m.delivery_status === 'read' ? 'read' : m.delivery_status === 'delivered' ? 'delivered' : 'sent'}</span>}{m.myReaction && <span>{m.myReaction}</span>}</div>
+                {openActions === m.id && <div className="message-actions"><div className="quick-reactions">{reactionChoices.map(emoji => <button aria-label={`React ${emoji}`} key={emoji} onClick={() => reactToMessage(m.id, emoji)}>{emoji}</button>)}</div><span className="action-divider" aria-hidden="true" /> <button onClick={() => { setReplyTo(m); setOpenActions(null) }}>Reply</button>{<button onClick={() => { pinMessage(m.id); setOpenActions(null) }}>{m.is_pinned ? 'Unpin' : 'Pin'}</button>}{mine && <><button onClick={() => { setEditingId(m.id); setEditingText(m.body); setOpenActions(null) }}>Edit</button><button onClick={() => deleteMessage(m.id)}>Delete</button></>}</div>}
+              </div>
+            </div>
+          })}{!filteredMessages.length && <EmptyState title={searchMessages ? 'No matching messages.' : 'No messages yet.'}>{searchMessages ? 'Try another search.' : 'Say hello to start the conversation.'}</EmptyState>}</div>}
+          {editingId && <div className="edit-compose"><input value={editingText} onChange={e => setEditingText(e.target.value)} /><button className="button primary" onClick={() => saveEdit(editingId)}>Save</button><button className="button secondary" onClick={() => setEditingId(null)}>Cancel</button></div>}
+          {replyTo && <div className="reply-compose"><span>Replying to: {replyTo.body}</span><button onClick={() => setReplyTo(null)}>×</button></div>}
+          <form className="chat-compose" onSubmit={sendMessage}><label className="attach-button" title="Share a photo, video, or file">＋<input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip" onChange={e => uploadAttachment(e.target.files?.[0])} hidden /></label><input value={message} onChange={e => updateTyping(e.target.value)} placeholder="Write a message…" aria-label="Message" /><button className="button primary">Send</button></form>
+        </> : <div className="chat-empty"><strong>Select a connection</strong><p>Choose an accepted connection to start a private chat.</p></div>}
       </div>
-    </div><SourceNote>Supabase community data · your account, connections, and private messages.</SourceNote>
+    </div><SourceNote>Community data is stored in your account. Chat supports delivery/read states, typing, replies, edits, deletion, reactions, attachments, search, and drafts.</SourceNote>
   </Card>
 }
-
-function MemeSection() {
-  const [meme, setMeme] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('')
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const json = await fetchJson(LEGACY_SOURCES.meme); if (!json?.template?.url) throw new Error('Unexpected meme response.'); setMeme(json.template) } catch (e) { setError(e.message || 'Unable to load meme.') } finally { setLoading(false) } }, [])
-  useEffect(() => { load() }, [load])
-  return <Card id="meme" eyebrow="09 · JustMeme" title="Random meme template" actions={<button className="button secondary" onClick={load} disabled={loading}>Another meme</button>}>
-    {loading ? <Loading label="Finding a meme…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : meme ? <><div className="meme"><img src={meme.url} alt={meme.name} /><strong>{meme.name}</strong></div><SourceNote>JustMeme · template returned by the public endpoint.</SourceNote></> : <EmptyState title="No meme template is available.">Try Another meme to request one.</EmptyState>}
-  </Card>
-}
-
 
 const SOURCES = {
   fact: 'https://asli-fun-fact-api.herokuapp.com/api/v2/facts/random',
@@ -451,6 +622,7 @@ const SOURCES = {
   kanye: 'https://api.kanye.rest',
   zen: 'https://zenquotes.io/api/random',
   datamuse: (q) => `https://api.datamuse.com/words?sp=${encodeURIComponent(q)}&max=12`,
+  dictionary: (q) => `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(q)}`,
   justMeme: 'https://justmeme.wtf/api/v1/random',
   imgflip: 'https://api.imgflip.com/get_memes',
   memesio: (q='funny') => `https://memesio.com/api/free/templates?q=${encodeURIComponent(q)}&pageSize=8&mode=hybrid&mediaType=image`,
@@ -536,59 +708,101 @@ function DiscoverSection() {
 }
 
 function WordLabSection() {
-  const [query, setQuery] = useState('happy'), [words, setWords] = useState([]), [loading, setLoading] = useState(false), [error, setError] = useState('')
-  const search = async (e) => { e?.preventDefault(); if (!query.trim()) return; setLoading(true); setError(''); try { setWords(await fetchJson(SOURCES.datamuse(query.trim()))) } catch { setWords([]); setError('Word search is temporarily unavailable.') } finally { setLoading(false) } }
-  useEffect(() => { search() }, [])
-  return <Card eyebrow="WORDS" title="Word explorer"><form className="input-row" onSubmit={search}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Try happy, music, ocean…" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Explore'}</button></form>{loading ? <Loading label="Finding related words…" /> : error ? <ErrorMessage message={error} onRetry={search} /> : <div className="chip-row word-results">{words.map(w => <span className="pill" key={w.word}>{w.word}</span>)}</div>}</Card>
-}
+  const [query, setQuery] = useState('')
+  const [entry, setEntry] = useState(null)
+  const [related, setRelated] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-function MemeHubSection() {
-  const [items, setItems] = useState([]), [selected, setSelected] = useState(null), [top, setTop] = useState(''), [bottom, setBottom] = useState(''), [loading, setLoading] = useState(true), [making, setMaking] = useState(false), [result, setResult] = useState(null)
-  const load = useCallback(async () => {
-    setLoading(true)
+  const search = async (e) => {
+    e?.preventDefault()
+    const term = query.trim()
+    if (!term) { setError('Enter a word to explore.'); return }
+    setLoading(true); setError(''); setEntry(null); setRelated([])
     try {
-      const x = await fetchJson(SOURCES.memesio('funny'))
-      const data = (x.items || []).filter(i => i.mediaType === 'image' && i.imageUrl)
-      if (!data.length) throw new Error()
-      setItems(data); setSelected(data[0]); setResult(null)
+      const [dictionaryResult, relatedResult] = await Promise.allSettled([
+        fetchJson(SOURCES.dictionary(term)),
+        fetchJson(SOURCES.datamuse(term)),
+      ])
+      if (dictionaryResult.status === 'fulfilled' && Array.isArray(dictionaryResult.value) && dictionaryResult.value[0]) {
+        setEntry(dictionaryResult.value[0])
+      } else if (relatedResult.status !== 'fulfilled') {
+        throw new Error('No result')
+      }
+      if (relatedResult.status === 'fulfilled') setRelated(Array.isArray(relatedResult.value) ? relatedResult.value.slice(0, 12) : [])
+      if (dictionaryResult.status !== 'fulfilled' && relatedResult.status !== 'fulfilled') throw new Error('No result')
     } catch {
-      try {
-        const x = await fetchJson(SOURCES.imgflip)
-        const data = (x.memes || []).slice(0, 12).map(m => ({ slug: String(m.id), name: m.name, imageUrl: m.url, captions: [{ id: 'top' }, { id: 'bottom' }] }))
-        setItems(data); setSelected(data[0]); setResult(null)
-      } catch { setItems([]); setSelected(null) }
+      setError('We could not find that word. Check the spelling and try again.')
     } finally { setLoading(false) }
-  }, [])
-  const create = async (e) => {
-    e.preventDefault(); if (!selected || (!top.trim() && !bottom.trim())) return
-    setMaking(true)
-    const captions = []
-    if (top.trim()) captions.push({ id: selected.captions?.[0]?.id || 'top', text: top.trim() })
-    if (bottom.trim()) captions.push({ id: selected.captions?.[1]?.id || 'bottom', text: bottom.trim() })
-    try {
-      const response = await fetch('https://memesio.com/api/v1/memes/caption-template', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ templateSlug: selected.slug, captions, visibility: 'private' }) })
-      const x = await response.json()
-      if (!response.ok || !x.data?.imageUrl) throw new Error()
-      setResult(x.data)
-    } catch {
-      setResult({ local: true, imageUrl: selected.imageUrl, captions })
-    } finally { setMaking(false) }
   }
-  useEffect(() => { load() }, [load])
-  return <Card eyebrow="MEMES" title="Make a meme" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh templates'}</button>}>
-    {loading ? <Loading label="Loading meme templates…" /> : !items.length ? <p className="muted-inline">No meme templates are available right now.</p> : <div className="meme-maker-layout">
-      <div><p className="widget-help">Pick a template, add text, then preview the finished meme.</p><div className="meme-grid">{items.slice(0, 8).map(m => <button type="button" className={`meme-tile meme-select ${selected?.slug === m.slug ? 'selected' : ''}`} key={m.slug} onClick={() => { setSelected(m); setTop(''); setBottom(''); setResult(null) }}><img src={m.imageUrl} alt={m.name} /><strong>{m.name}</strong></button>)}</div></div>
-      <div className="meme-editor">{selected && <><div className="meme-live-preview"><img src={result?.imageUrl || selected.imageUrl} alt={selected.name} /><div className="meme-caption meme-caption-top">{top}</div><div className="meme-caption meme-caption-bottom">{bottom}</div></div><form onSubmit={create} className="lyrics-form"><label>Top text<input value={top} onChange={e => setTop(e.target.value)} placeholder="Top caption" /></label><label>Bottom text<input value={bottom} onChange={e => setBottom(e.target.value)} placeholder="Bottom caption" /></label><button className="button primary" disabled={making}>{making ? 'Creating…' : 'Create meme'}</button></form>{result?.local && <p className="muted-inline">Preview created in the site. The external renderer was unavailable, so your captions are shown directly over the template.</p>}{result?.pageUrl && <a className="button secondary" href={result.pageUrl} target="_blank" rel="noreferrer">Open finished meme</a>}</>}</div>
+
+  const meaning = entry?.meanings?.find(x => x.definitions?.length)
+  const pronunciation = entry?.phonetic || entry?.phonetics?.find(x => x.text)?.text
+  const examples = (entry?.meanings || []).flatMap(x => x.definitions || []).map(x => x.example).filter(Boolean).slice(0, 3)
+  const definitions = (entry?.meanings || []).flatMap(x => (x.definitions || []).map(d => ({ part: x.partOfSpeech, text: d.definition }))).slice(0, 8)
+
+  return <Card eyebrow="WORDS" title="Word explorer">
+    <form className="word-search" onSubmit={search}>
+      <label htmlFor="word-search-input">Search for a word</label>
+      <div className="input-row"><input id="word-search-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Enter a word." autoComplete="off" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Explore'}</button></div>
+    </form>
+    {!loading && !entry && !related.length && !error && <EmptyState title="Start with a word.">Search for a word to see definitions, pronunciation, examples, and related words.</EmptyState>}
+    {loading && <Loading label={`Exploring “${query.trim()}”…`} />}
+    {error && <ErrorMessage message={error} onRetry={() => search()} />}
+    {!loading && (entry || related.length > 0) && <div className="word-result">
+      {entry && <div className="word-definition-panel">
+        <div className="word-result-head"><div><h3>{entry.word}</h3>{pronunciation && <p className="pronunciation">{pronunciation}</p>}</div><span className="word-language">English</span></div>
+        <div className="definition-list">{definitions.map((d, i) => <article key={i}><span>{d.part || 'Definition'}</span><p>{d.text}</p></article>)}</div>
+        {examples.length > 0 && <div className="word-examples"><h4>Examples</h4>{examples.map((x, i) => <p key={i}>“{x}”</p>)}</div>}
+      </div>}
+      <div className="word-related"><h4>Related words</h4>{related.length ? <div className="chip-row word-results">{related.map(w => <button type="button" className="pill word-pill" key={w.word} onClick={() => { setQuery(w.word); setTimeout(() => document.getElementById('word-search-input')?.focus(), 0) }}>{w.word}</button>)}</div> : <p className="muted-inline">No related words were returned.</p>}</div>
     </div>}
   </Card>
 }
 
 function TriviaCard() {
-  const [question, setQuestion] = useState(null), [loading, setLoading] = useState(false), [selected, setSelected] = useState(null)
-  const load = async () => { setLoading(true); setSelected(null); try { const x = await fetchJson(SOURCES.trivia); const q = x.results?.[0]; if (!q) throw new Error(); setQuestion({ question: decode64(q.question), correct: decode64(q.correct_answer), answers: q.incorrect_answers.map(decode64).concat(decode64(q.correct_answer)).sort(() => Math.random() - .5) }) } catch { setQuestion(null) } finally { setLoading(false) } }
+  const [questions, setQuestions] = useState([])
+  const [index, setIndex] = useState(0)
+  const [selected, setSelected] = useState(null)
+  const [score, setScore] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true); setError(''); setSelected(null); setScore(0); setIndex(0)
+    try {
+      const x = await fetchJson(SOURCES.trivia)
+      const next = (x.results || []).map(q => ({
+        question: decode64(q.question),
+        correct: decode64(q.correct_answer),
+        answers: q.incorrect_answers.map(decode64).concat(decode64(q.correct_answer)).sort(() => Math.random() - .5),
+        category: decode64(q.category || 'General'),
+        difficulty: decode64(q.difficulty || 'medium'),
+      }))
+      if (!next.length) throw new Error()
+      setQuestions(next)
+    } catch { setQuestions([]); setError('Trivia could not be loaded right now.') }
+    finally { setLoading(false) }
+  }
   useEffect(() => { load() }, [])
-  return <MiniTool title="Trivia" source="Open Trivia" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'New question'}</button>}>
-    {question ? <><p className="feature-text">{question.question}</p><div className="trivia-options">{question.answers.map((answer, i) => { const picked = selected === answer; const correct = answer === question.correct; return <button key={`${answer}-${i}`} type="button" className={`trivia-option ${picked ? (correct ? 'correct' : 'wrong') : ''}`} onClick={() => setSelected(answer)} disabled={selected !== null}><span>{String.fromCharCode(65 + i)}</span>{answer}</button> })}</div>{selected && <p className={`trivia-feedback ${selected === question.correct ? 'correct-text' : 'wrong-text'}`}>{selected === question.correct ? 'Correct.' : `Not quite. The correct answer is ${question.correct}.`}</p>}</> : <p className="muted-inline">No question is available right now.</p>}
+
+  const current = questions[index]
+  const choose = (answer) => {
+    if (selected !== null) return
+    setSelected(answer)
+    if (answer === current.correct) setScore(v => v + 1)
+  }
+  const next = () => { setSelected(null); setIndex(v => v + 1) }
+
+  return <MiniTool title="Trivia" source="Open Trivia" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : questions.length ? 'Restart' : 'Start quiz'}</button>}>
+    {loading ? <Loading label="Preparing 10 questions…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : current ? <div className="trivia-game">
+      <div className="trivia-topline"><span>Question {index + 1} of {questions.length}</span><strong>Score {score}</strong></div>
+      <div className="trivia-progress" aria-label={`Question ${index + 1} of ${questions.length}`}><span style={{ width: `${((index + 1) / questions.length) * 100}%` }} /></div>
+      <div className="trivia-meta"><span>{current.category}</span><span>{current.difficulty}</span></div>
+      <p className="feature-text trivia-question">{current.question}</p>
+      <div className="trivia-options">{current.answers.map((answer, i) => { const correct = answer === current.correct; const picked = selected === answer; return <button key={`${answer}-${i}`} type="button" className={`trivia-option ${selected ? (correct ? 'correct' : picked ? 'wrong' : '') : ''}`} onClick={() => choose(answer)} disabled={selected !== null}><span>{String.fromCharCode(65 + i)}</span>{answer}</button> })}</div>
+      {selected !== null && <div className={`trivia-feedback ${selected === current.correct ? 'correct-text' : 'wrong-text'}`}><strong>{selected === current.correct ? 'Correct.' : 'Not quite.'}</strong><span>{selected === current.correct ? 'Good one.' : `The correct answer is ${current.correct}.`}</span>{index < questions.length - 1 ? <button className="button secondary" onClick={next}>Next question</button> : <button className="button primary" onClick={load}>Play again · {score}/{questions.length}</button>}</div>}
+    </div> : <EmptyState title="Ready when you are.">Start a 10-question quiz with progress and scoring.</EmptyState>}
   </MiniTool>
 }
 
@@ -616,80 +830,84 @@ function GamesHubSection() {
 }
 
 function MusicSection() {
-  const [artist, setArtist] = useState(''), [title, setTitle] = useState(''), [lyrics, setLyrics] = useState(''), [loading, setLoading] = useState(false), [genre, setGenre] = useState(''), [genreLoading, setGenreLoading] = useState(false)
-  const getLyrics = async (e) => {
-    e.preventDefault()
-    if (!artist.trim() || !title.trim()) return
-    setLoading(true); setLyrics('')
+  const [tag, setTag] = useState('rock')
+  const [stations, setStations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async (nextTag = tag) => {
+    setLoading(true)
+    setError('')
     try {
-      let x
-      try { x = await fetchJson(SOURCES.lyrics(artist.trim(), title.trim())) } catch { x = null }
-      if (x?.lyrics) setLyrics(x.lyrics)
-      else {
-        try { x = await fetchJson(SOURCES.lyricsFallback(artist.trim(), title.trim())) } catch { x = null }
-        if (x?.plainLyrics) setLyrics(x.plainLyrics)
-        else {
-          const matches = await fetchJson(SOURCES.lyricsSearch(artist.trim(), title.trim()))
-          const best = Array.isArray(matches) && matches.length ? matches[0] : null
-          setLyrics(best?.plainLyrics || 'Lyrics were not found for that artist and song.')
-        }
-      }
-    } catch { setLyrics('Lyrics were not found for that artist and song.') }
-    finally { setLoading(false) }
+      const data = await fetchJson(LEGACY_SOURCES.radio(nextTag))
+      const usable = (Array.isArray(data) ? data : []).filter(station => station?.url_resolved).slice(0, 8)
+      setStations(usable)
+      if (!usable.length) setError('No playable stations were found for this genre. Try another.')
+    } catch (e) {
+      setStations([])
+      setError('The radio directory is temporarily unavailable. Try Refresh again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [tag])
+
+  useEffect(() => { load('rock') }, [load])
+
+  const changeGenre = (nextTag) => {
+    setTag(nextTag)
+    load(nextTag)
   }
-  const gen = async () => { setGenreLoading(true); try { const x = await fetchText(SOURCES.genre); setGenre(x.trim()) } catch { setGenre('Unable to generate a genre right now.') } finally { setGenreLoading(false) } }
-  return <Card eyebrow="MUSIC" title="Music discovery">
-    <div className="music-layout music-layout-simple">
-      <MiniTool title="Lyrics lookup" source="Lyrics.ovh + LRCLIB">
-        <p className="widget-help">Search by artist and song title. A second lyrics source is used when the first one has no match.</p>
-        <form className="lyrics-form" onSubmit={getLyrics}>
-          <label>Artist<input value={artist} onChange={e => setArtist(e.target.value)} placeholder="e.g. Coldplay" /></label>
-          <label>Song<input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Yellow" /></label>
-          <button className="button secondary" disabled={loading}>{loading ? 'Finding lyrics…' : 'Search lyrics'}</button>
-        </form>
-        {lyrics && <pre className="lyrics">{lyrics}</pre>}
-      </MiniTool>
-      <MiniTool title="Genre generator" source="Binary Jazz" actions={<button className="button secondary" onClick={gen} disabled={genreLoading}>{genreLoading ? 'Generating…' : 'Generate'}</button>}>
-        <p className="feature-text genre-result">{genre || 'Click Generate for a random genre.'}</p>
-      </MiniTool>
+
+  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
+    <p className="widget-help">Pick a genre and play a live station directly in A Fun Time. No song search or lyrics lookup is needed.</p>
+    <div className="chip-row">
+      {['rock', 'pop', 'jazz', 'classical', 'electronic'].map(option => <button key={option} className={`button ${tag === option ? 'primary' : 'secondary'}`} onClick={() => changeGenre(option)} disabled={loading}>{option[0].toUpperCase() + option.slice(1)}</button>)}
     </div>
+    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{stations.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '—'} · {station.tags || tag}</span></div><audio controls preload="none" src={station.url_resolved} aria-label={`Play ${station.name}`} /></div>)}</div>}
+    {!loading && !error && stations.length > 0 && <SourceNote>Radio Browser · live station directory.</SourceNote>}
   </Card>
 }
 
 function NewsSection() {
   const [items, setItems] = useState([]), [loading, setLoading] = useState(false), [error, setError] = useState(''), [article, setArticle] = useState(null)
+  const [query, setQuery] = useState(''), [sourceFilter, setSourceFilter] = useState('all'), [sort, setSort] = useState('newest')
+  const [saved, setSaved] = useState(() => JSON.parse(localStorage.getItem('aft-saved-items') || '[]'))
   const load = async () => {
     setLoading(true); setError('')
     const results = await Promise.allSettled([fetchJson(SOURCES.spaceflight), fetchJson(SOURCES.florida), fetchJson(SOURCES.noozra)])
-    const space = results[0].status === 'fulfilled' ? results[0].value : {}
-    const florida = results[1].status === 'fulfilled' ? results[1].value : []
-    const noozra = results[2].status === 'fulfilled' ? results[2].value : []
-    const s = (space.results || []).map(x => ({ title: x.title, url: x.url, date: x.published_at, source: 'Spaceflight News', summary: x.summary || x.description, image: x.image_url }))
-    const f = Array.isArray(florida) ? florida.slice(0, 5).map(x => ({ title: x.title || x.headline || x.text || 'Florida Man', url: x.url, date: x.date, source: 'Florida Man', summary: x.description || x.text })) : []
-    const n = (Array.isArray(noozra) ? noozra : (noozra.articles || noozra.data || [])).slice(0, 5).map(x => ({ title: x.title || x.headline || x.name, url: x.url || x.link, date: x.publishedAt || x.published_at || x.date, source: 'Noozra', summary: x.description || x.summary, image: x.image || x.urlToImage }))
-    const combined = [...s, ...f, ...n].filter(x => x.title && x.url)
-    setItems(combined)
-    if (!combined.length) setError('No stories are available right now.')
-    setLoading(false)
+    const space = results[0].status==='fulfilled'?results[0].value:{}; const florida=results[1].status==='fulfilled'?results[1].value:[]; const noozra=results[2].status==='fulfilled'?results[2].value:[]
+    const s=(space.results||[]).map(x=>({title:x.title,url:x.url,date:x.published_at,source:'Spaceflight News',summary:x.summary||x.description,image:x.image_url,author:x.news_site||'Spaceflight News'}))
+    const f=(Array.isArray(florida)?florida:[]).slice(0,8).map(x=>({title:x.title||x.headline||x.text||'Florida Man',url:x.url,date:x.date,source:'Florida Man',summary:x.description||x.text,author:'Florida Man'}))
+    const n=(Array.isArray(noozra)?noozra:(noozra.articles||noozra.data||[])).slice(0,8).map(x=>({title:x.title||x.headline||x.name,url:x.url||x.link,date:x.publishedAt||x.published_at||x.date,source:'Noozra',summary:x.description||x.summary,image:x.image||x.urlToImage,author:x.author||'Noozra'}))
+    const combined=[...s,...f,...n].filter(x=>x.title&&x.url); setItems(combined); if(!combined.length)setError('No stories are available right now.'); setLoading(false)
   }
-  useEffect(() => { load() }, [])
-  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>}>
-    <p className="widget-help">Click a story to read the information supplied by the news source. The full publisher page opens only when you choose it.</p>
-    {loading ? <Loading label="Loading stories…" /> : error ? <p className="muted-inline">{error}</p> : <>{article && <div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3></div><button className="button secondary" onClick={() => setArticle(null)}>Close</button></div>{article.image && <img className="article-image" src={article.image} alt="" />}<p className="article-summary">{article.summary || 'This source did not provide a summary.'}</p><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read full story at source</a></div>}<div className="news-list">{items.slice(0, 12).map((x, i) => <button className="news-item" key={`${x.title}-${i}`} onClick={() => setArticle(x)}><div>{x.image && <img className="news-thumb" src={x.image} alt="" />}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date ? ' · ' + new Date(x.date).toLocaleDateString() : ''}</small></span></div><span className="news-read">Read</span></button>)}</div></>}
+  useEffect(()=>{load()},[])
+  const sources=['all',...Array.from(new Set(items.map(x=>x.source)))]
+  const filtered=items.filter(x=>(sourceFilter==='all'||x.source===sourceFilter)&&x.title.toLowerCase().includes(query.toLowerCase().trim())).sort((a,b)=>sort==='newest'?(new Date(b.date||0)-new Date(a.date||0)):a.title.localeCompare(b.title))
+  const saveArticle=(x)=>{const next=saved.some(s=>s.key===x.url)?saved.filter(s=>s.key!==x.url):[...saved,{key:x.url,type:'story',title:x.title,data:x}];setSaved(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
+  const openArticle=(x)=>setArticle(x)
+  const articleIndex=filtered.findIndex(x=>x.url===article?.url)
+  const moveArticle=(delta)=>{const next=filtered[articleIndex+delta];if(next)setArticle(next)}
+  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</button>}>
+    <p className="widget-help">Browse stories by source, search titles, sort them, and save anything you want to return to later.</p>
+    <div className="story-tools"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search stories" aria-label="Search stories"/><select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)} aria-label="Filter stories by source">{sources.map(x=><option key={x} value={x}>{x==='all'?'All sources':x}</option>)}</select><select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort stories"><option value="newest">Newest</option><option value="title">Title</option></select></div>
+    {loading?<Loading label="Loading stories…"/>:error?<ErrorMessage message={error} onRetry={load}/>:article?<div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3><small>{article.author||article.source}{article.date?' · '+new Date(article.date).toLocaleDateString():''} · 3 min read</small></div><button className="button secondary" onClick={()=>setArticle(null)}>Close</button></div>{article.image&&<img className="article-image" src={article.image} alt={article.title}/>}<p className="article-summary">{article.summary||'This source did not provide a summary.'}</p><div className="article-actions"><button className="button secondary" onClick={()=>saveArticle(article)}>{saved.some(s=>s.key===article.url)?'Saved':'Save'}</button><button className="button secondary" onClick={()=>navigator.clipboard?.writeText(article.url)}>Share</button><button className="button secondary" disabled={articleIndex<=0} onClick={()=>moveArticle(-1)}>Previous</button><button className="button secondary" disabled={articleIndex<0||articleIndex>=filtered.length-1} onClick={()=>moveArticle(1)}>Next</button><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read source</a></div></div>:<div className="news-list">{filtered.slice(0,20).map((x,i)=><button className="news-item" key={`${x.url}-${i}`} onClick={()=>openArticle(x)}><div>{x.image&&<img className="news-thumb" src={x.image} alt=""/>}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date?' · '+new Date(x.date).toLocaleDateString():''} · 3 min read</small></span></div><span className="news-read">{saved.some(s=>s.key===x.url)?'Saved':'Read'}</span></button>)}{!filtered.length&&<EmptyState title="No matching stories.">Try another search or filter.</EmptyState>}</div>}
   </Card>
 }
-
 function FoodSection() {
-  const [meals, setMeals] = useState([]), [selected, setSelected] = useState(null), [loading, setLoading] = useState(false)
-  const load = async () => { setLoading(true); try { const value = await fetchJson(SOURCES.meals); setMeals(value.meals?.[0] ? [value.meals[0]] : []); setSelected(null) } catch { setMeals([]) } finally { setLoading(false) } }
-  useEffect(() => { load() }, [])
-  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh recipes'}</button>}>
-    <p className="widget-help">Click any dish to open its full recipe, ingredients, and cooking instructions.</p>
-    {loading ? <Loading label="Finding recipes…" /> : <div className="food-grid">{meals.map(meal => <button type="button" className="food-card" key={meal.idMeal} onClick={() => setSelected(meal)}><img src={meal.strMealThumb} alt={meal.strMeal} /><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} · {meal.strArea}</small></span></button>)}</div>}
-    {selected && <div className="recipe-panel"><div className="recipe-head"><div><p className="eyebrow">RECIPE</p><h3>{selected.strMeal}</h3></div><button className="button secondary" onClick={() => setSelected(null)}>Close</button></div><div className="recipe-layout"><img className="recipe-image" src={selected.strMealThumb} alt={selected.strMeal} /><div><h4>Ingredients</h4><ul className="ingredients">{Array.from({ length: 20 }, (_, i) => i + 1).map(i => { const ingredient = selected[`strIngredient${i}`]; const measure = selected[`strMeasure${i}`]; return ingredient?.trim() ? <li key={i}>{measure?.trim()} {ingredient.trim()}</li> : null })}</ul></div></div><h4>Instructions</h4><p className="recipe-instructions">{selected.strInstructions}</p></div>}
+  const [meals,setMeals]=useState([]),[selected,setSelected]=useState(null),[loading,setLoading]=useState(false),[servings,setServings]=useState(2),[checked,setChecked]=useState({}),[cookingMode,setCookingMode]=useState(false)
+  const [saved,setSaved]=useState(()=>JSON.parse(localStorage.getItem('aft-saved-items')||'[]'))
+  const load=async()=>{setLoading(true);try{const value=await fetchJson(SOURCES.meals);setMeals(value.meals?.[0]?[value.meals[0]]:[]);setSelected(null)}catch{setMeals([])}finally{setLoading(false)}}
+  useEffect(()=>{load()},[])
+  const scaleMeasure=(measure)=>{if(!measure)return '';const match=measure.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/);if(!match)return measure;const value=Number(match[1])*(servings/2);const rounded=Number.isInteger(value)?value:value.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');return `${rounded}${match[2]}`};const ingredients=selected?Array.from({length:20},(_,i)=>i+1).map(i=>({ingredient:selected[`strIngredient${i}`]?.trim(),measure:scaleMeasure(selected[`strMeasure${i}`]?.trim())})).filter(x=>x.ingredient):[]
+  const saveRecipe=()=>{if(!selected)return;const key=`recipe:${selected.idMeal}`;const next=saved.some(s=>s.key===key)?saved.filter(s=>s.key!==key):[...saved,{key,type:'recipe',title:selected.strMeal,data:selected}];setSaved(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
+  const print=()=>window.print()
+  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading?'Loading…':'Refresh recipe'}</button>}>
+    <p className="widget-help">Open a recipe, scale it to your serving size, check ingredients as you go, or switch to cooking mode.</p>
+    {loading?<Loading label="Finding a recipe…"/>:<div className="food-grid">{meals.map(meal=><button type="button" className="food-card" key={meal.idMeal} onClick={()=>{setSelected(meal);setServings(2);setChecked({})}}><img src={meal.strMealThumb} alt={meal.strMeal}/><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} · {meal.strArea}</small></span></button>)}</div>}
+    {selected&&<div className={`recipe-panel ${cookingMode?'cooking-mode':''}`}><div className="recipe-head"><div><p className="eyebrow">RECIPE</p><h3>{selected.strMeal}</h3><div className="recipe-meta"><span>Difficulty: source-dependent</span><span>Time: source-dependent</span><span>Servings <input className="servings-input" type="number" min="1" max="20" value={servings} onChange={e=>setServings(Math.max(1,Number(e.target.value)||1))}/></span></div></div><div className="recipe-actions"><button className="button secondary" onClick={()=>setCookingMode(v=>!v)}>{cookingMode?'Exit cooking mode':'Cooking mode'}</button><button className="button secondary" onClick={print}>Print</button><button className="button secondary" onClick={saveRecipe}>{saved.some(s=>s.key===`recipe:${selected.idMeal}`)?'Saved':'Save'}</button><button className="button secondary" onClick={()=>setSelected(null)}>Close</button></div></div><button className="jump-recipe" onClick={()=>document.getElementById('ingredients')?.scrollIntoView({behavior:'smooth'})}>Jump to ingredients</button><div className="recipe-layout"><img className="recipe-image" src={selected.strMealThumb} alt={selected.strMeal}/><div><h4 id="ingredients">Ingredients</h4><ul className="ingredients">{ingredients.map((x,i)=><li key={i}><label className="ingredient-check"><input type="checkbox" checked={!!checked[i]} onChange={e=>setChecked(v=>({...v,[i]:e.target.checked}))}/><span>{x.measure?`${x.measure} `:''}{x.ingredient}</span></label></li>)}</ul></div></div><h4>Instructions</h4><p className="recipe-instructions">{selected.strInstructions}</p><p className="source-note">Preparation/cooking time, dietary labels, allergens, and difficulty are shown only when the source supplies reliable values.</p></div>}
   </Card>
 }
-
 function FunOdditiesSection() {
   const fallback = [
     ['Why wombat poop is cube-shaped', 'Wombats produce cube-shaped droppings, which helps them mark territory without the pieces rolling away.'],
@@ -706,6 +924,34 @@ function FunOdditiesSection() {
   </Card>
 }
 
+function RadioMiniPlayer() {
+  const [station, setStation] = useState(null)
+  const [playing, setPlaying] = useState(false)
+  const audioRef = React.useRef(null)
+  useEffect(() => {
+    const onPlay = (event) => {
+      const next = event.detail
+      setStation(next)
+      setPlaying(true)
+      setTimeout(() => audioRef.current?.play().catch(() => setPlaying(false)), 0)
+    }
+    window.addEventListener('aft:radio-play', onPlay)
+    return () => window.removeEventListener('aft:radio-play', onPlay)
+  }, [])
+  if (!station) return null
+  const toggle = async () => {
+    if (!audioRef.current) return
+    if (audioRef.current.paused) { try { await audioRef.current.play(); setPlaying(true) } catch { setPlaying(false) } }
+    else { audioRef.current.pause(); setPlaying(false) }
+  }
+  return <div className="radio-mini-player" role="region" aria-label="Radio player">
+    <audio ref={audioRef} src={station.url} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
+    <div className="radio-mini-copy"><strong>{station.name}</strong><span>{station.country || 'Live station'}</span></div>
+    <button className="button secondary radio-mini-toggle" type="button" onClick={toggle} aria-label={playing ? 'Pause radio' : 'Play radio'}>{playing ? 'Pause' : 'Play'}</button>
+    <label className="radio-volume">Volume<input type="range" min="0" max="1" step="0.05" defaultValue="0.8" onChange={e => { if (audioRef.current) audioRef.current.volume = Number(e.target.value) }} /></label>
+    <button className="radio-mini-close" type="button" aria-label="Close radio player" onClick={() => { audioRef.current?.pause(); setStation(null); setPlaying(false) }}>×</button>
+  </div>
+}
 function HomePage() {
   return <section className="ps2-home" aria-label="Home">
     <div className="ps2-home-copy">
@@ -721,10 +967,33 @@ function useHashRoute() {
   return route
 }
 
+function InfoPage({ title, children }) {
+  return <Card eyebrow="A FUN TIME" title={title}><div className="info-page">{children}</div></Card>
+}
+
+function NotFoundPage() {
+  return <InfoPage title="Page not found"><p className="feature-text">That section does not exist.</p><a className="button primary" href="#/home">Return home</a></InfoPage>
+}
+
+function SavedPage() {
+  const [items,setItems]=useState(()=>JSON.parse(localStorage.getItem('aft-saved-items')||'[]'))
+  const remove=(key)=>{const next=items.filter(x=>x.key!==key);setItems(next);localStorage.setItem('aft-saved-items',JSON.stringify(next))}
+  return <Card eyebrow="SAVED" title="Saved items"><p className="widget-help">Stories and recipes you save stay on this device.</p>{!items.length?<EmptyState title="Nothing saved yet.">Use Save on a story or recipe to keep it here.</EmptyState>:<div className="saved-list">{items.map(item=><article className="saved-item" key={item.key}><div><span className="eyebrow">{item.type}</span><h3>{item.title}</h3><p>{item.type==='story'?(item.data.summary||'Saved story'):(item.data.strCategory||'Saved recipe')}</p></div><div className="actions"><button className="button secondary" onClick={()=>remove(item.key)}>Remove</button>{item.type==='story'&&<a className="button primary" href={`#/news`}>Open stories</a>}{item.type==='recipe'&&<a className="button primary" href={`#/food`}>Open recipes</a>}</div></article>)}</div>}</Card>
+}
+
+function SettingsPage({ currentUserId }) {
+  const [profile,setProfile]=useState({username:'',bio:'',interests:'',avatar_url:''}); const [saving,setSaving]=useState(false); const [message,setMessage]=useState('')
+  useEffect(()=>{supabase.from('profiles').select('username,bio,interests,avatar_url').eq('id',currentUserId).single().then(({data})=>{if(data)setProfile({username:data.username||'',bio:data.bio||'',interests:data.interests||'',avatar_url:data.avatar_url||''})})},[currentUserId])
+  const save=async(e)=>{e.preventDefault();setSaving(true);setMessage('');const {error}=await supabase.from('profiles').update({bio:profile.bio.trim(),interests:profile.interests.trim(),avatar_url:profile.avatar_url.trim()||null}).eq('id',currentUserId);setMessage(error?'Could not save profile details. Run the updated schema first.':'Profile saved.');setSaving(false)}
+  return <Card eyebrow="SETTINGS" title="Profile & settings"><form className="settings-form" onSubmit={save}><label>Username<input value={profile.username} disabled/></label><label>Bio<textarea value={profile.bio} onChange={e=>setProfile({...profile,bio:e.target.value})} maxLength={240} placeholder="A short description about you."/></label><label>Interests<input value={profile.interests} onChange={e=>setProfile({...profile,interests:e.target.value})} placeholder="music, games, cricket"/></label><label>Avatar image URL<input value={profile.avatar_url} onChange={e=>setProfile({...profile,avatar_url:e.target.value})} placeholder="https://…"/></label>{message&&<p className="status" role="status">{message}</p>}<button className="button primary" disabled={saving}>{saving?'Saving…':'Save profile'}</button></form></Card>
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [checking, setChecking] = useState(true)
   const route = useHashRoute()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  useEffect(() => { setMobileNavOpen(false) }, [route])
 
   useEffect(() => {
     if (!supabase) { setChecking(false); return }
@@ -739,43 +1008,50 @@ function App() {
   const username = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || 'Guest'
   const signOut = async () => { await supabase.auth.signOut() }
   const nav = [
-    ['home', 'Home'], ['discover', 'Discover'], ['words', 'Words'], ['memes', 'Memes'], ['games', 'Games'], ['music', 'Music'], ['news', 'News'], ['food', 'Food'], ['oddities', 'Oddities'], ['community', 'Community']
+    ['home', 'Home'], ['community', 'Community'], ['discover', 'Discover'], ['words', 'Words'], ['games', 'Games'], ['music', 'Radio'], ['news', 'Stories'], ['food', 'Recipes'], ['oddities', 'Oddities'], ['saved', 'Saved'], ['settings', 'Settings']
   ]
 
-  const page = {
+  const pages = {
     home: <HomePage />,
     discover: <DiscoverSection />,
     words: <WordLabSection />,
-    memes: <MemeHubSection />,
     games: <GamesHubSection />,
     music: <MusicSection />,
     news: <NewsSection />,
     food: <FoodSection />,
     oddities: <FunOdditiesSection />,
     community: <SocialSection currentUserId={session?.user?.id} />,
-  }[route] || <HomePage />
+    about: <InfoPage title="About"><p className="feature-text">A Fun Time is a personal collection of small, strange things to explore, play, read, and share.</p></InfoPage>,
+    help: <InfoPage title="Help"><p className="feature-text">Use the sidebar to move between sections. Search fields accept Enter, and interactive cards explain their current state when data is loading or unavailable.</p></InfoPage>,
+    terms: <InfoPage title="Terms"><p className="feature-text">Use the site responsibly. External content remains subject to its original publisher or service.</p></InfoPage>,
+    saved: <SavedPage />,
+    settings: <SettingsPage currentUserId={session?.user?.id} />,
+    accessibility: <InfoPage title="Accessibility"><p className="feature-text">A Fun Time uses high-contrast text, keyboard focus states, semantic controls, and reduced-motion support where possible.</p></InfoPage>,
+  }
+  const page = pages[route] || <NotFoundPage />
 
   // Keep the landing screen public. Account-only areas still use the existing sign-in flow.
   if (route !== 'home' && !session) return <Auth onLogin={() => window.location.reload()} />
 
   return <div className="ps2-shell">
     <div className="ps2-scanlines" aria-hidden="true" />
+    <div className="pixel-cat" aria-hidden="true"><img src="/minecraft-cat.svg" alt="" /></div>
     <header className="ps2-topbar">
+      <button className="mobile-nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(v => !v)}>MENU</button>
       <div className="ps2-brand">
-        <span className="ps2-logo-mark">2</span>
-        <div>
-          <p className="ps2-brand-title">A FUN TIME</p>
-          <p className="ps2-brand-sub">SYSTEM MENU</p>
-        </div>
+        <div><p className="ps2-brand-title">A FUN TIME</p></div>
       </div>
-      <div className="ps2-status">
-        <span>{session ? `USER: ${username}` : 'GUEST MODE'}</span>
-        <span className="ps2-online"><i /> ONLINE</span>
+      <div className="ps2-top-actions">
+        <div className="ps2-status">
+          <span>{session ? `USER: ${username}` : 'GUEST MODE'}</span>
+          <span className="ps2-online"><i /> ONLINE</span>
+        </div>
+        {session && <button className="ps2-top-signout" onClick={signOut}>SIGN OUT</button>}
       </div>
     </header>
 
     <div className="ps2-layout">
-      <aside className="ps2-sidebar">
+      <aside className={`ps2-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <p className="ps2-menu-label">MAIN MENU</p>
         <nav className="ps2-nav" aria-label="Main navigation">
           {nav.map(([id, label], index) => <a key={id} className={route === id ? 'active' : ''} href={`#/${id}`}>
@@ -784,25 +1060,17 @@ function App() {
             {route === id && <b>▶</b>}
           </a>)}
         </nav>
-        <div className="ps2-controls">
-          <span><b>↑↓</b> SELECT</span>
-          <span><b>×</b> ENTER</span>
-        </div>
-        {session && <button className="ps2-signout" onClick={signOut}>SIGN OUT</button>}
       </aside>
 
       <main className="ps2-main">
-        <div className="ps2-page-title">
-          <span>MEMORY CARD</span>
-          <strong>{nav.find(x => x[0] === route)?.[1]?.toUpperCase() || 'HOME'}</strong>
-        </div>
-        {page}
+          {page}
       </main>
     </div>
 
-        <footer className="ps2-footer">
+    <RadioMiniPlayer />
+    <footer className="ps2-footer">
       <span>© A FUN TIME</span>
-      <a href="https://github.com/2bitthug" target="_blank" rel="noreferrer">CONTACT / SUGGESTIONS</a>
+      <div className="footer-links"><a href="#/about">ABOUT</a><a href="#/help">HELP</a><a href="#/terms">TERMS</a><a href="#/accessibility">ACCESSIBILITY</a><a href="https://github.com/2bitthug" target="_blank" rel="noreferrer">CONTACT</a></div>
       <span>v1.0</span>
     </footer>
   </div>
