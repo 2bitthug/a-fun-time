@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
@@ -1201,25 +1201,34 @@ function SettingsPage({ currentUserId }) {
     avatar_preset: 'pixel-01',
     accent_color: '#39ff14',
     banner_preset: 'default',
-    profile_sections: { interests: true, favoriteWords: true, achievements: true }
+    profile_sections: {
+      interests: true,
+      favoriteWords: true,
+      achievements: true
+    }
   })
+
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
-  const [avatarOpen, setAvatarOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
 
   useEffect(() => {
     let active = true
+
     async function loadProfile() {
       if (!currentUserId) return
+
       setLoading(true)
+
       const { data, error } = await supabase
         .from('profiles')
         .select('username,bio,interests,display_name,avatar_preset,accent_color,banner_preset,profile_sections')
         .eq('id', currentUserId)
         .single()
+
       if (!active) return
+
       if (error) {
         setMessage('Could not load profile details.')
       } else if (data) {
@@ -1228,9 +1237,15 @@ function SettingsPage({ currentUserId }) {
           display_name: data.display_name || data.username || '',
           bio: data.bio || '',
           interests: data.interests || '',
-          avatar_preset: PROFILE_AVATARS.some(a => a[0] === data.avatar_preset) ? data.avatar_preset : 'pixel-01',
-          accent_color: PROFILE_COLORS.some(c => c[0] === data.accent_color) ? data.accent_color : '#39ff14',
-          banner_preset: PROFILE_BANNERS.some(b => b[0] === data.banner_preset) ? data.banner_preset : 'default',
+          avatar_preset: PROFILE_AVATARS.some(a => a[0] === data.avatar_preset)
+            ? data.avatar_preset
+            : 'pixel-01',
+          accent_color: PROFILE_COLORS.some(c => c[0] === data.accent_color)
+            ? data.accent_color
+            : '#39ff14',
+          banner_preset: PROFILE_BANNERS.some(b => b[0] === data.banner_preset)
+            ? data.banner_preset
+            : 'default',
           profile_sections: {
             interests: data.profile_sections?.interests !== false,
             favoriteWords: data.profile_sections?.favoriteWords !== false,
@@ -1238,19 +1253,26 @@ function SettingsPage({ currentUserId }) {
           }
         })
       }
+
       setLoading(false)
     }
+
     loadProfile()
-    return () => { active = false }
+
+    return () => {
+      active = false
+    }
   }, [currentUserId])
 
   const selectedAvatar = PROFILE_AVATARS.find(a => a[0] === profile.avatar_preset) || PROFILE_AVATARS[0]
-  const selectedAvatarUri = useMemo(() => avatarDataUri(selectedAvatar[2]), [selectedAvatar])
+  const selectedAvatarUri = useMemo(
+    () => avatarDataUri(selectedAvatar[2]),
+    [selectedAvatar]
+  )
 
   const chooseAvatar = (id) => {
     setAvatarError(false)
     setProfile(current => ({ ...current, avatar_preset: id }))
-    setAvatarOpen(false)
   }
 
   const generateAnother = () => {
@@ -1262,7 +1284,10 @@ function SettingsPage({ currentUserId }) {
   const toggleSection = (key) => {
     setProfile(current => ({
       ...current,
-      profile_sections: { ...current.profile_sections, [key]: !current.profile_sections[key] }
+      profile_sections: {
+        ...current.profile_sections,
+        [key]: !current.profile_sections[key]
+      }
     }))
   }
 
@@ -1270,6 +1295,7 @@ function SettingsPage({ currentUserId }) {
     event.preventDefault()
     setSaving(true)
     setMessage('')
+
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -1283,160 +1309,189 @@ function SettingsPage({ currentUserId }) {
         profile_sections: profile.profile_sections
       })
       .eq('id', currentUserId)
+
     setMessage(error ? 'Could not save profile details.' : 'Profile saved.')
     setSaving(false)
   }
 
   if (loading) {
-    return <Card eyebrow="SETTINGS" title="Profile & settings"><Loading label="Loading profile..." /></Card>
+    return (
+      <Card eyebrow="SETTINGS" title="Profile & settings">
+        <Loading label="Loading profile..." />
+      </Card>
+    )
   }
-
-  const interests = profile.interests.split(',').map(x => x.trim()).filter(Boolean)
 
   return (
     <Card eyebrow="SETTINGS" title="Profile & settings">
-      <style>{`
-        .aft-profile-wrap { display:grid; gap:20px; }
-        .aft-profile-preview { position:relative; overflow:hidden; border:1px solid var(--profile-accent); border-radius:18px; box-shadow:0 0 18px var(--profile-accent-soft); background:#111; }
-        .aft-profile-banner { height:120px; border-bottom:1px solid var(--profile-accent); background:#181818; }
-        .aft-profile-banner.banner-grid { background-color:#161616; background-image:linear-gradient(var(--profile-accent-faint) 1px,transparent 1px),linear-gradient(90deg,var(--profile-accent-faint) 1px,transparent 1px); background-size:22px 22px; }
-        .aft-profile-banner.banner-scanlines { background:repeating-linear-gradient(0deg,#111 0,#111 5px,#1d1d1d 6px,#1d1d1d 7px); }
-        .aft-profile-banner.banner-sunset { background:radial-gradient(circle at 80% 20%,#5b284f 0,#241d31 38%,#101010 78%); }
-        .aft-profile-banner.banner-mono { background:linear-gradient(135deg,#2a2a2a,#0c0c0c); }
-        .aft-profile-body { position:relative; padding:0 22px 22px; }
-        .aft-profile-avatar { width:104px; height:104px; margin-top:-52px; border:3px solid var(--profile-accent); border-radius:22px; overflow:hidden; background:#090909; box-shadow:0 0 16px var(--profile-accent-soft); }
-        .aft-profile-avatar img { width:100%; height:100%; display:block; image-rendering:auto; }
-        .aft-profile-avatar-fallback { display:grid; place-items:center; width:100%; height:100%; color:var(--profile-accent); font-size:32px; }
-        .aft-profile-name { display:block; margin-top:12px; color:var(--profile-accent); font-size:1.35rem; }
-        .aft-profile-handle { color:#aaa; font-size:.9rem; }
-        .aft-profile-bio { max-width:720px; margin:10px 0 0; color:#ddd; }
-        .aft-profile-sections { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:18px; }
-        .aft-profile-section { padding:12px; border-top:1px solid var(--profile-accent-soft); background:#0d0d0d; }
-        .aft-profile-section h4 { margin:0 0 8px; color:var(--profile-accent); }
-        .aft-profile-tags { display:flex; flex-wrap:wrap; gap:6px; }
-        .aft-profile-tag { border:1px solid var(--profile-accent-soft); border-radius:999px; padding:4px 8px; font-size:.78rem; }
-        .aft-profile-editor { display:grid; gap:16px; }
-        .aft-profile-editor-section { border:1px solid #333; border-radius:14px; padding:16px; }
-        .aft-profile-editor-section legend { padding:0 7px; color:var(--profile-accent); font-weight:700; }
-        .aft-avatar-current { display:flex; align-items:center; gap:14px; }
-        .aft-avatar-current img,.aft-avatar-current .aft-avatar-fallback { width:64px; height:64px; border:2px solid var(--profile-accent); border-radius:14px; background:#090909; }
-        .aft-avatar-current img { display:block; }
-        .aft-avatar-fallback { display:grid; place-items:center; color:var(--profile-accent); font-size:22px; }
-        .aft-avatar-actions { display:flex; flex-wrap:wrap; gap:8px; }
-        .aft-avatar-picker { margin-top:12px; max-height:330px; overflow:auto; padding:10px; border:1px solid #333; border-radius:12px; background:#0b0b0b; }
-        .aft-avatar-grid { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; }
-        .aft-avatar-choice { position:relative; aspect-ratio:1; border:1px solid #333; border-radius:10px; background:#151515; padding:4px; cursor:pointer; }
-        .aft-avatar-choice:hover,.aft-avatar-choice:focus-visible { border-color:var(--profile-accent); outline:2px solid var(--profile-accent-soft); outline-offset:1px; }
-        .aft-avatar-choice.selected { border:2px solid var(--profile-accent); box-shadow:0 0 10px var(--profile-accent-soft); }
-        .aft-avatar-choice img { width:100%; height:100%; display:block; border-radius:7px; }
-        .aft-avatar-check { position:absolute; right:3px; top:3px; min-width:18px; height:18px; padding:0 4px; display:grid; place-items:center; border-radius:9px; background:var(--profile-accent); color:#000; font-size:11px; font-weight:900; }
-        .aft-color-grid { display:flex; flex-wrap:wrap; gap:9px; }
-        .aft-color-choice { display:flex; align-items:center; gap:7px; border:1px solid #333; border-radius:999px; padding:7px 10px; background:#111; color:#eee; cursor:pointer; }
-        .aft-color-choice span { width:18px; height:18px; border-radius:50%; background:var(--choice-color); border:1px solid #777; }
-        .aft-color-choice.selected { border-color:var(--choice-color); box-shadow:0 0 10px color-mix(in srgb,var(--choice-color) 35%,transparent); }
-        .aft-banner-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; }
-        .aft-banner-choice { min-height:68px; border:1px solid #333; border-radius:10px; color:#eee; cursor:pointer; }
-        .aft-banner-choice.selected { border:2px solid var(--profile-accent); box-shadow:0 0 12px var(--profile-accent-soft); }
-        .aft-toggle-list { display:flex; flex-wrap:wrap; gap:14px; }
-        .aft-toggle { display:flex; align-items:center; gap:7px; }
-        .aft-toggle input { accent-color:var(--profile-accent); }
-        @media (max-width:760px) {
-          .aft-profile-sections { grid-template-columns:1fr; }
-          .aft-avatar-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
-          .aft-banner-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-        }
-      `}</style>
-
       <form className="settings-form profile-settings-form" onSubmit={save}>
-        <div className="aft-profile-wrap" style={{
-          '--profile-accent': profile.accent_color,
-          '--profile-accent-soft': `${profile.accent_color}55`,
-          '--profile-accent-faint': `${profile.accent_color}22`
-        }}>
-          <section className="aft-profile-preview" aria-label="Live profile preview">
-            <div className={`aft-profile-banner banner-${profile.banner_preset}`} aria-label="Profile banner" />
-            <div className="aft-profile-body">
-              <div className="aft-profile-avatar">
-                {selectedAvatarUri && !avatarError
-                  ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} profile avatar`} onError={() => setAvatarError(true)} />
-                  : <span className="aft-profile-avatar-fallback">?</span>}
-              </div>
-              <strong className="aft-profile-name">{profile.display_name || profile.username || 'Your profile'}</strong>
-              <span className="aft-profile-handle">@{profile.username}</span>
-              {profile.bio && <p className="aft-profile-bio">{profile.bio}</p>}
-
-              <div className="aft-profile-sections">
-                {profile.profile_sections.interests && <div className="aft-profile-section"><h4>Interests</h4><div className="aft-profile-tags">{interests.length ? interests.map(x => <span className="aft-profile-tag" key={x}>{x}</span>) : <span>None added yet.</span>}</div></div>}
-                {profile.profile_sections.favoriteWords && <div className="aft-profile-section"><h4>Favorite words</h4><span>Not added yet.</span></div>}
-                {profile.profile_sections.achievements && <div className="aft-profile-section"><h4>Achievements</h4><span>Not added yet.</span></div>}
-              </div>
+        <div className="profile-editor-layout">
+          <section className={`profile-preview-card banner-${profile.banner_preset}`} style={{ '--profile-accent': profile.accent_color }}>
+            <div className="profile-preview-avatar">
+              {selectedAvatarUri && !avatarError ? (
+                <img
+                  src={selectedAvatarUri}
+                  alt={`${selectedAvatar[1]} profile avatar`}
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <span className="profile-avatar-fallback" aria-hidden="true">?</span>
+              )}
             </div>
+            <strong>{profile.display_name || profile.username || 'Your profile'}</strong>
+            <span>@{profile.username}</span>
+            {profile.bio && <p>{profile.bio}</p>}
           </section>
 
           <div className="profile-editor-fields">
-            <label>Username<input value={profile.username} disabled /></label>
-            <label>Display name<input value={profile.display_name} maxLength={32} onChange={e => setProfile({ ...profile, display_name: e.target.value })} placeholder="Your display name" /></label>
-            <label>Bio<textarea value={profile.bio} maxLength={240} onChange={e => setProfile({ ...profile, bio: e.target.value })} placeholder="A short description about you." /><small>{profile.bio.length}/240</small></label>
-            <label>Interests<input value={profile.interests} maxLength={240} onChange={e => setProfile({ ...profile, interests: e.target.value })} placeholder="music, games, cricket" /></label>
+            <label>
+              Username
+              <input value={profile.username} disabled />
+            </label>
+
+            <label>
+              Display name
+              <input
+                value={profile.display_name}
+                maxLength={32}
+                onChange={e => setProfile({ ...profile, display_name: e.target.value })}
+                placeholder="Your display name"
+              />
+            </label>
+
+            <label>
+              Bio
+              <textarea
+                value={profile.bio}
+                maxLength={240}
+                onChange={e => setProfile({ ...profile, bio: e.target.value })}
+                placeholder="A short description about you."
+              />
+              <small>{profile.bio.length}/240</small>
+            </label>
+
+            <label>
+              Interests
+              <input
+                value={profile.interests}
+                maxLength={240}
+                onChange={e => setProfile({ ...profile, interests: e.target.value })}
+                placeholder="music, games, cricket"
+              />
+            </label>
+          </div>
+        </div>
+
+        <fieldset className="profile-editor-section">
+          <legend>Choose your avatar</legend>
+          <p className="widget-help">
+            Select an avatar or generate another one. Your selection stays the same after refresh.
+          </p>
+
+          <div className="profile-avatar-grid" role="group" aria-label="Profile avatars">
+            {PROFILE_AVATARS.map(([id, label, seed]) => {
+              const uri = avatarDataUri(seed)
+              const selected = profile.avatar_preset === id
+
+              return (
+                <button
+                  type="button"
+                  key={id}
+                  className={`profile-avatar-choice ${selected ? 'selected' : ''}`}
+                  aria-label={`${label}${selected ? ', selected' : ''}`}
+                  aria-pressed={selected}
+                  onClick={() => chooseAvatar(id)}
+                >
+                  {uri ? (
+                    <img src={uri} alt="" aria-hidden="true" />
+                  ) : (
+                    <span aria-hidden="true">?</span>
+                  )}
+                  {selected && <span className="profile-avatar-selected-label">SELECTED</span>}
+                </button>
+              )
+            })}
           </div>
 
-          <fieldset className="aft-profile-editor-section">
-            <legend>Avatar</legend>
-            <div className="aft-avatar-current">
-              {selectedAvatarUri && !avatarError ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} current avatar`} /> : <span className="aft-avatar-fallback">?</span>}
-              <div>
-                <strong>{selectedAvatar[1]}</strong>
-                <div className="aft-avatar-actions">
-                  <button type="button" className="button secondary" onClick={() => setAvatarOpen(v => !v)} aria-expanded={avatarOpen}>{avatarOpen ? 'Close avatars' : 'Change avatar'}</button>
-                  <button type="button" className="button secondary" onClick={generateAnother}>Generate another</button>
-                </div>
-              </div>
-            </div>
-            {avatarOpen && <div className="aft-avatar-picker" role="group" aria-label="Choose profile avatar">
-              <div className="aft-avatar-grid">
-                {PROFILE_AVATARS.map(([id, label, seed]) => {
-                  const uri = avatarDataUri(seed)
-                  const selected = profile.avatar_preset === id
-                  return <button type="button" key={id} className={`aft-avatar-choice ${selected ? 'selected' : ''}`} aria-label={`${label}${selected ? ', selected' : ''}`} aria-pressed={selected} onClick={() => chooseAvatar(id)}>
-                    {uri ? <img src={uri} alt="" aria-hidden="true" /> : <span>?</span>}
-                    {selected && <span className="aft-avatar-check" aria-hidden="true">✓</span>}
-                  </button>
-                })}
-              </div>
-            </div>}
-          </fieldset>
+          <button
+            type="button"
+            className="button secondary profile-generate-button"
+            onClick={generateAnother}
+          >
+            Generate another
+          </button>
+        </fieldset>
 
-          <fieldset className="aft-profile-editor-section">
-            <legend>Accent colour</legend>
-            <div className="aft-color-grid" role="group" aria-label="Profile accent colours">
-              {PROFILE_COLORS.map(([value, label]) => {
-                const selected = profile.accent_color === value
-                return <button type="button" key={value} className={`aft-color-choice ${selected ? 'selected' : ''}`} style={{ '--choice-color': value }} aria-label={`${label}${selected ? ', selected' : ''}`} aria-pressed={selected} onClick={() => setProfile({ ...profile, accent_color: value })}><span aria-hidden="true" /><b>{label}</b></button>
-              })}
-            </div>
-          </fieldset>
+        <fieldset className="profile-editor-section">
+          <legend>Accent colour</legend>
+          <div className="profile-color-grid" role="group" aria-label="Profile accent colours">
+            {PROFILE_COLORS.map(([value, label]) => (
+              <button
+                type="button"
+                key={value}
+                className={`profile-color-choice ${profile.accent_color === value ? 'selected' : ''}`}
+                style={{ '--choice-color': value }}
+                aria-label={`${label}${profile.accent_color === value ? ', selected' : ''}`}
+                aria-pressed={profile.accent_color === value}
+                onClick={() => setProfile({ ...profile, accent_color: value })}
+              >
+                <span aria-hidden="true" />
+                <b>{label}</b>
+              </button>
+            ))}
+          </div>
+        </fieldset>
 
-          <fieldset className="aft-profile-editor-section">
-            <legend>Profile banner</legend>
-            <div className="aft-banner-grid" role="group" aria-label="Profile banners">
-              {PROFILE_BANNERS.map(([id, label]) => <button type="button" key={id} className={`aft-banner-choice aft-profile-banner banner-${id} ${profile.banner_preset === id ? 'selected' : ''}`} aria-label={`${label}${profile.banner_preset === id ? ', selected' : ''}`} aria-pressed={profile.banner_preset === id} onClick={() => setProfile({ ...profile, banner_preset: id })}><span>{label}</span></button>)}
-            </div>
-          </fieldset>
+        <fieldset className="profile-editor-section">
+          <legend>Profile banner</legend>
+          <div className="profile-banner-grid" role="group" aria-label="Profile banners">
+            {PROFILE_BANNERS.map(([id, label]) => (
+              <button
+                type="button"
+                key={id}
+                className={`profile-banner-choice banner-${id} ${profile.banner_preset === id ? 'selected' : ''}`}
+                aria-label={`${label}${profile.banner_preset === id ? ', selected' : ''}`}
+                aria-pressed={profile.banner_preset === id}
+                onClick={() => setProfile({ ...profile, banner_preset: id })}
+              >
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
 
-          <fieldset className="aft-profile-editor-section">
-            <legend>Visible sections</legend>
-            <div className="aft-toggle-list">
-              {[['interests','Interests'],['favoriteWords','Favorite words'],['achievements','Achievements']].map(([key,label]) => <label className="aft-toggle" key={key}><input type="checkbox" checked={profile.profile_sections[key]} onChange={() => toggleSection(key)} /><span>{label}</span></label>)}
-            </div>
-          </fieldset>
+        <fieldset className="profile-editor-section">
+          <legend>Visible sections</legend>
+          <div className="profile-toggle-list">
+            {[
+              ['interests', 'Interests'],
+              ['favoriteWords', 'Favorite words'],
+              ['achievements', 'Achievements']
+            ].map(([key, label]) => (
+              <label className="profile-toggle" key={key}>
+                <input
+                  type="checkbox"
+                  checked={profile.profile_sections[key]}
+                  onChange={() => toggleSection(key)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
-          {message && <p className="status" role="status">{message}</p>}
-          <div className="actions profile-save-actions"><button className="button primary" disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</button></div>
+        {message && <p className="status" role="status">{message}</p>}
+
+        <div className="actions profile-save-actions">
+          <button className="button primary" disabled={saving}>
+            {saving ? 'Saving...' : 'Save profile'}
+          </button>
         </div>
       </form>
     </Card>
   )
 }
+
 function App() {
   const [session, setSession] = useState(null)
   const [checking, setChecking] = useState(true)
