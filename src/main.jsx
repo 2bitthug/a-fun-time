@@ -177,7 +177,7 @@ function Auth({ onLogin }) {
               setNotice('')
             }}
             autoComplete="username"
-            placeholder="e.g. kaushik_01"
+            placeholder="e.g. GK_01"
           />
 
           {mode === 'register' && (
@@ -727,7 +727,16 @@ function SocialSection({ currentUserId }) {
                 {reply && <div className="message-reply"><strong>{reply.sender_id === currentUserId ? 'You' : selected.username}</strong><span>{reply.body}</span></div>}
                 {m.attachment_url ? <div className="attachment-preview">{m.attachment_type?.startsWith('image/') ? <img src={m.attachment_url} alt={m.attachment_name || 'Shared image'} /> : m.attachment_type?.startsWith('video/') ? <video controls src={m.attachment_url} /> : <a href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Open file'}</a>}</div> : <span>{m.body}</span>}
                 {m.edited_at && <em className="edited-label">edited</em>}
-                <div className="message-meta">{m.delivery_status && mine && <span>{m.delivery_status === 'read' ? 'read' : m.delivery_status === 'delivered' ? 'delivered' : 'sent'}</span>}{m.myReaction && <span>{m.myReaction}</span>}</div>
+                <div className="message-meta">
+                  {m.delivery_status && mine && (
+                    <span>{m.delivery_status === 'read' ? 'read' : m.delivery_status === 'delivered' ? 'delivered' : 'sent'}</span>
+                  )}
+                </div>
+                {m.myReaction && (
+                  <div className="message-reaction" aria-label={`Reaction: ${m.myReaction}`}>
+                    {m.myReaction}
+                  </div>
+                )}
                 {openActions === m.id && <div className="message-actions"><div className="quick-reactions">{reactionChoices.map(emoji => <button aria-label={`React ${emoji}`} key={emoji} onClick={() => reactToMessage(m.id, emoji)}>{emoji}</button>)}</div><span className="action-divider" aria-hidden="true" /> <button onClick={() => { setReplyTo(m); setOpenActions(null) }}>Reply</button>{<button onClick={() => { pinMessage(m.id); setOpenActions(null) }}>{m.is_pinned ? 'Unpin' : 'Pin'}</button>}{mine && <><button onClick={() => { setEditingId(m.id); setEditingText(m.body); setOpenActions(null) }}>Edit</button><button onClick={() => deleteMessage(m.id)}>Delete</button></>}</div>}
               </div>
             </div>
@@ -1083,7 +1092,7 @@ function RadioMiniPlayer() {
 function HomePage() {
   return <section className="ps2-home" aria-label="Home">
     <div className="ps2-home-copy">
-      <p>Hi. this here is my site, if u have suggestions to make it better, lmk here <a href="https://github.com/2bitthug" target="_blank" rel="noreferrer">github.com/2bitthug</a></p>
+      <p>aim anti-algo</p>
     </div>
   </section>
 }
