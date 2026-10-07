@@ -712,7 +712,7 @@ function SocialSection({ currentUserId }) {
         <h3 className="subheading">Incoming requests</h3>
         <div className="user-list">{pending.map(c => <div className="user-row" key={c.id}><div><strong>{c.sender.username}</strong><span>Wants to connect</span></div><div className="actions"><button className="button secondary" onClick={() => respondToRequest(c.id, 'accepted')}>Accept</button><button className="button secondary" onClick={() => respondToRequest(c.id, 'rejected')}>Decline</button></div></div>)}{!pending.length && <EmptyState title="No pending requests.">New incoming connection requests will appear here.</EmptyState>}</div>
         <h3 className="subheading">Connections</h3>
-        <div className="user-list">{connections.map(c => { const other = c.sender_id === currentUserId ? c.receiver : c.sender; return <button className={`user-row chat-select ${selected?.id === other.id ? 'selected' : ''}`} key={c.id} onClick={() => openChat(other)}><div><strong>{other.username}</strong><span>Connected · Open chat</span></div><span>›</span></button> })}{!connections.length && <EmptyState title="No connections yet.">Search for someone above and send a connection request to start building your community.</EmptyState>}</div>
+        <div className="user-list">{connections.map(c => { const other = c.sender_id === currentUserId ? c.receiver : c.sender; return <button className={`user-row chat-select ${selected?.id === other.id ? 'selected' : ''}`} key={c.id} onClick={() => openChat(other)}><div><strong>{other.username}</strong><span>Connected · Open chat</span></div><span>â€º</span></button> })}{!connections.length && <EmptyState title="No connections yet.">Search for someone above and send a connection request to start building your community.</EmptyState>}</div>
       </div>
       <div className="chat-box">
         {selected ? <>
@@ -1195,9 +1195,11 @@ function avatarDataUri(seed) {
 function SettingsPage({ currentUserId }) {
   const defaultSections = {
     interests: true,
+    favoriteWords: true,
     achievements: true,
     memberSince: true,
-    completion: true
+    completion: true,
+    weeklyGoals: false
   }
 
   const [profile, setProfile] = useState({
@@ -1211,11 +1213,49 @@ function SettingsPage({ currentUserId }) {
     profile_sections: defaultSections
   })
   const [createdAt, setCreatedAt] = useState(null)
+  const [weeklyState, setWeeklyState] = useState({ week: '', saves: 0, customizations: 0, completed: [] })
+  const [cosmetics, setCosmetics] = useState([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [avatarError, setAvatarError] = useState(false)
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
+
+  const weekKey = (date = new Date()) => {
+    const value = new Date(date)
+    const day = value.getDay() || 7
+    value.setDate(value.getDate() - day + 1)
+    return value.toISOString().slice(0, 10)
+  }
+
+  const readWeeklyState = (userId) => {
+    if (!userId) return { week: weekKey(), saves: 0, customizations: 0, completed: [] }
+    try {
+      const raw = localStorage.getItem('aft-profile-weekly:' + userId)
+      const parsed = raw ? JSON.parse(raw) : null
+      const week = weekKey()
+      if (!parsed || parsed.week !== week) return { week, saves: 0, customizations: 0, completed: [] }
+      return {
+        week,
+        saves: Number(parsed.saves) || 0,
+        customizations: Number(parsed.customizations) || 0,
+        completed: Array.isArray(parsed.completed) ? parsed.completed : []
+      }
+    } catch {
+      return { week: weekKey(), saves: 0, customizations: 0, completed: [] }
+    }
+  }
+
+  const readCosmetics = (userId) => {
+    if (!userId) return []
+    try {
+      const raw = localStorage.getItem('aft-profile-cosmetics:' + userId)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
 
   const selectedAvatar = PROFILE_AVATARS.find(a => a[0] === profile.avatar_preset) || PROFILE_AVATARS[0]
   const selectedAvatarUri = useMemo(() => avatarDataUri(selectedAvatar[2]), [selectedAvatar])
@@ -1254,10 +1294,9 @@ function SettingsPage({ currentUserId }) {
           accent_color: PROFILE_COLORS.some(c => c[0] === data.accent_color) ? data.accent_color : '#39ff14',
           banner_preset: PROFILE_BANNERS.some(b => b[0] === data.banner_preset) ? data.banner_preset : 'default',
           profile_sections: {
-            interests: data.profile_sections?.interests !== false,
-            achievements: data.profile_sections?.achievements !== false,
-            memberSince: data.profile_sections?.memberSince !== false,
-            completion: data.profile_sections?.completion !== false
+            ...defaultSections,
+            ...(data.profile_sections || {}),
+            weeklyGoals: data.profile_sections?.weeklyGoals === true
           }
         })
       } else {
@@ -1265,11 +1304,8 @@ function SettingsPage({ currentUserId }) {
       }
     }
 
-    try {
-      localStorage.removeItem('aft-profile-weekly:' + currentUserId)
-      localStorage.removeItem('aft-profile-cosmetics:' + currentUserId)
-      localStorage.removeItem('aft-weekly-goals-enabled:' + currentUserId)
-    } catch { }
+    setWeeklyState(readWeeklyState(currentUserId))
+    setCosmetics(readCosmetics(currentUserId))
     loadProfile().finally(() => active && setLoading(false))
     return () => { active = false }
   }, [currentUserId])
@@ -1316,19 +1352,41 @@ function SettingsPage({ currentUserId }) {
     [100, 'Century', '100-day member']
   ]
   const earnedMilestones = milestones.filter(item => daysOnSite !== null && daysOnSite >= item[0])
+  const weeklyGoals = [
+    ['save', 'Save your profile once', weeklyState.saves >= 1, 'Glow Frame'],
+    ['customize', 'Try two cosmetic changes', weeklyState.customizations >= 2, 'Style Spark'],
+    ['complete', 'Reach 100% profile completion', completionPercent >= 100, 'Explorer Tag']
+  ]
+
+  useEffect(() => {
+    if (!profile.profile_sections.weeklyGoals || !currentUserId) return
+    const next = { ...weeklyState, completed: [...weeklyState.completed] }
+    let changed = false
+    const nextCosmetics = [...cosmetics]
+    weeklyGoals.forEach(([id, , earned, cosmetic]) => {
+      if (earned && !next.completed.includes(id)) {
+        next.completed.push(id)
+        changed = true
+      }
+      const reward = cosmetic.toLowerCase().replace(/\s+/g, '-')
+      if (earned && !nextCosmetics.includes(reward)) {
+        nextCosmetics.push(reward)
+        setCosmetics(nextCosmetics)
+        localStorage.setItem('aft-profile-cosmetics:' + currentUserId, JSON.stringify(nextCosmetics))
+      }
+    })
+    if (changed) {
+      setWeeklyState(next)
+      localStorage.setItem('aft-profile-weekly:' + currentUserId, JSON.stringify(next))
+    }
+  }, [profile.profile_sections.weeklyGoals, currentUserId, weeklyState.saves, weeklyState.customizations, completionPercent])
 
   const save = async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
 
-    const cleanSections = {
-      interests: profile.profile_sections.interests === true,
-      achievements: profile.profile_sections.achievements === true,
-      memberSince: profile.profile_sections.memberSince === true,
-      completion: profile.profile_sections.completion === true
-    }
-
+    const before = profile
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -1339,12 +1397,26 @@ function SettingsPage({ currentUserId }) {
         avatar_url: null,
         accent_color: profile.accent_color,
         banner_preset: profile.banner_preset,
-        profile_sections: cleanSections
+        profile_sections: profile.profile_sections
       })
       .eq('id', currentUserId)
 
     setMessage(error ? 'Could not save profile details.' : 'Profile saved.')
     setSaving(false)
+
+    if (!error && profile.profile_sections.weeklyGoals) {
+      const changed = before.avatar_preset !== profile.avatar_preset || before.banner_preset !== profile.banner_preset || before.accent_color !== profile.accent_color
+      const next = {
+        ...readWeeklyState(currentUserId),
+        saves: readWeeklyState(currentUserId).saves + 1,
+        customizations: readWeeklyState(currentUserId).customizations + (changed ? 1 : 0)
+      }
+      setWeeklyState(next)
+      localStorage.setItem('aft-profile-weekly:' + currentUserId, JSON.stringify(next))
+      localStorage.setItem('aft-weekly-goals-enabled:' + currentUserId, 'true')
+    } else if (!error) {
+      localStorage.setItem('aft-weekly-goals-enabled:' + currentUserId, 'false')
+    }
   }
 
   if (loading) {
@@ -1352,6 +1424,7 @@ function SettingsPage({ currentUserId }) {
   }
 
   const visibleAchievements = profile.profile_sections.achievements
+  const hasCosmeticReward = cosmetics.length > 0
 
   return (
     <Card eyebrow="SETTINGS" title="Profile & settings">
@@ -1363,16 +1436,17 @@ function SettingsPage({ currentUserId }) {
           .engagement-muted{color:#aaa1b7;font-size:.88rem;margin:0}
           .member-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
           .member-days{font-size:1.55rem;font-weight:700;color:var(--profile-accent,#39ff14)}
-          .badge-row,.suggestion-row{display:flex;gap:8px;flex-wrap:wrap}
+          .badge-row,.goal-row,.suggestion-row{display:flex;gap:8px;flex-wrap:wrap}
           .engagement-badge{padding:7px 10px;border:1px solid var(--profile-accent,#39ff14);border-radius:999px;background:#0d0b11;color:#f5eff8;font-size:.8rem}
           .engagement-badge.locked{opacity:.45;border-color:#4a4052}
           .completion-track{height:8px;background:#211a28;border-radius:999px;overflow:hidden;margin:10px 0}
           .completion-fill{height:100%;background:var(--profile-accent,#39ff14);border-radius:inherit;transition:width .2s ease}
           .suggestion-row span{padding:5px 8px;border:1px solid #40344a;border-radius:999px;color:#c8c0ce;font-size:.78rem}
-          .profile-toggle-list{display:grid;gap:12px}
-          .profile-toggle-list .profile-toggle{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;margin:0!important}
-          .profile-toggle-list .profile-toggle input[type="checkbox"]{width:18px!important;height:18px!important;min-width:18px!important;flex:0 0 18px!important;margin:0!important;accent-color:var(--profile-accent,#39ff14)}
-          .profile-toggle-list .profile-toggle span{display:block!important;margin:0!important}
+          .goal-card{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid #241d2b}
+          .goal-card:first-child{border-top:0}
+          .goal-reward{color:var(--profile-accent,#39ff14);font-size:.8rem}
+          .engagement-toggle{display:flex;align-items:center;gap:9px;margin-top:12px;color:#d9d1df}
+          .engagement-toggle input{accent-color:var(--profile-accent,#39ff14)}
           .profile-editor-compact{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
           .profile-current-avatar{width:74px;height:74px;border-radius:18px;border:2px solid var(--profile-accent,#39ff14);background:#050505;display:grid;place-items:center;overflow:hidden;box-shadow:0 0 14px color-mix(in srgb,var(--profile-accent,#39ff14) 24%,transparent)}
           .profile-current-avatar img{width:100%;height:100%;object-fit:cover}
@@ -1393,6 +1467,7 @@ function SettingsPage({ currentUserId }) {
             <strong>{profile.display_name || profile.username || 'Your profile'}</strong>
             <span>@{profile.username}</span>
             {profile.bio && <p>{profile.bio}</p>}
+            {hasCosmeticReward && <small>Cosmetic rewards unlocked: {cosmetics.length}</small>}
           </section>
 
           <div className="profile-editor-fields">
@@ -1423,9 +1498,15 @@ function SettingsPage({ currentUserId }) {
             <div className="badge-row">
               {milestones.map(([days, label]) => <span key={days} className={`engagement-badge ${daysOnSite !== null && daysOnSite >= days ? '' : 'locked'}`}>{daysOnSite !== null && daysOnSite >= days ? '✓ ' : ''}{label}</span>)}
               <span className={`engagement-badge ${completionPercent >= 100 ? '' : 'locked'}`}>{completionPercent >= 100 ? '✓ ' : ''}Profile complete</span>
+              {cosmetics.map(item => <span className="engagement-badge" key={item}>Cosmetic: {item.replace(/-/g, ' ')}</span>)}
             </div>
           </section>}
 
+          {profile.profile_sections.weeklyGoals && <section className="engagement-panel" style={{ '--profile-accent': profile.accent_color }}>
+            <h3>Weekly goals</h3>
+            <p className="engagement-muted">Optional goals. Rewards are cosmetic only.</p>
+            {weeklyGoals.map(([id, label, earned, reward]) => <div className="goal-card" key={id}><div><strong>{label}</strong><div className="engagement-muted">{earned ? 'Completed' : 'Not completed yet'}</div></div><span className="goal-reward">{earned ? '✓ ' : ''}{reward}</span></div>)}
+          </section>}
         </div>
 
         <fieldset className="profile-editor-section">
@@ -1454,11 +1535,14 @@ function SettingsPage({ currentUserId }) {
           <div className="profile-toggle-list">
             {[
               ['interests', 'Interests'],
+              ['favoriteWords', 'Favorite words'],
               ['achievements', 'Achievements'],
               ['memberSince', 'Member since'],
-              ['completion', 'Profile completion']
+              ['completion', 'Profile completion'],
+              ['weeklyGoals', 'Weekly goals']
             ].map(([key, label]) => <label className="profile-toggle" key={key}><input type="checkbox" checked={profile.profile_sections[key] === true} onChange={() => toggleSection(key)} /><span>{label}</span></label>)}
           </div>
+          <label className="engagement-toggle"><input type="checkbox" checked={profile.profile_sections.weeklyGoals === true} onChange={() => toggleSection('weeklyGoals')} /><span>Enable optional weekly goals. No streaks or notifications.</span></label>
         </fieldset>
 
         {message && <p className="status" role="status">{message}</p>}
@@ -1473,6 +1557,21 @@ function App() {
   const route = useHashRoute()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   useEffect(() => { setMobileNavOpen(false) }, [route])
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId || localStorage.getItem('aft-weekly-goals-enabled:' + userId) !== 'true') return
+    const now = new Date()
+    const day = now.getDay() || 7
+    now.setDate(now.getDate() - day + 1)
+    const week = now.toISOString().slice(0, 10)
+    const key = 'aft-profile-weekly:' + userId
+    try {
+      const raw = localStorage.getItem(key)
+      const state = raw ? JSON.parse(raw) : { week, saves: 0, customizations: 0, completed: [] }
+      if (state.week !== week) localStorage.setItem(key, JSON.stringify({ week, saves: 0, customizations: 0, completed: [] }))
+    } catch {}
+  }, [route, session?.user?.id])
+
   useEffect(() => {
     if (!supabase) { setChecking(false); return }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setChecking(false) })

@@ -32,7 +32,7 @@ async function fetchText(url, options = {}) {
   return response.text()
 }
 
-function Loading({ label = 'Loading…' }) { return <p className="status" role="status" aria-live="polite">{label}</p> }
+function Loading({ label = 'Loadingâ€¦' }) { return <p className="status" role="status" aria-live="polite">{label}</p> }
 function ErrorMessage({ message, onRetry }) {
   return <div className="status error" role="alert"><span>{message}</span>{onRetry && <button className="button inline-action" type="button" onClick={onRetry}>Try again</button>}</div>
 }
@@ -72,7 +72,7 @@ function Auth({ onLogin }) {
     }
 
     if (!/^[a-z0-9_]{3,24}$/.test(user)) {
-      return setError('Username must be 3-24 characters using letters, numbers, or underscores.')
+      return setError('Username must be 3â€“24 characters using letters, numbers, or underscores.')
     }
 
     if (mode === 'register') {
@@ -238,7 +238,7 @@ function Auth({ onLogin }) {
             disabled={busy}
           >
             {busy
-              ? 'Please wait…'
+              ? 'Please waitâ€¦'
               : mode === 'login'
                 ? 'Sign in'
                 : 'Register'}
@@ -270,21 +270,21 @@ function Auth({ onLogin }) {
 
 function PokemonSection() {
   const [pokemon, setPokemon] = useState(null), [query, setQuery] = useState('pikachu'), [loading, setLoading] = useState(false), [error, setError] = useState('')
-  const load = useCallback(async (name = query) => { setLoading(true); setError(''); try { setPokemon(await fetchJson(LEGACY_SOURCES.pokemon(name))) } catch { setPokemon(null); setError('Pokémon not found. Try a name such as pikachu or charizard.') } finally { setLoading(false) } }, [query])
+  const load = useCallback(async (name = query) => { setLoading(true); setError(''); try { setPokemon(await fetchJson(LEGACY_SOURCES.pokemon(name))) } catch { setPokemon(null); setError('PokÃ©mon not found. Try a name such as pikachu or charizard.') } finally { setLoading(false) } }, [query])
   useEffect(() => { load('pikachu') }, [])
-  return <Card id="pokemon" eyebrow="01 · Pokémon data" title="Pokémon explorer">
-    <form className="input-row" onSubmit={(e) => { e.preventDefault(); load() }}><input aria-label="Pokémon name" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Try pikachu or charizard" /><button className="button primary" disabled={loading}>{loading ? 'Loading…' : 'Search'}</button></form>
-    <p className="widget-help">Search public Pokémon data and see a Pokémon’s basic stats.</p>
-    {loading && <Loading label="Fetching Pokémon data…" />}{error && <ErrorMessage message={error} onRetry={() => load()} />}
-    {pokemon && !loading && <><div className="pokemon"><img src={pokemon.sprites?.front_default} alt="" /><div><h3>{pokemon.name}</h3><p className="meta">#{String(pokemon.id).padStart(4, '0')} · {pokemon.types.map((t) => t.type.name).join(' / ')}</p><p className="statline">Height {pokemon.height / 10} m · Weight {pokemon.weight / 10} kg</p></div></div><SourceNote>Pokémon data · public data retrieved when you search.</SourceNote></>}
+  return <Card id="pokemon" eyebrow="01 Â· PokÃ©mon data" title="PokÃ©mon explorer">
+    <form className="input-row" onSubmit={(e) => { e.preventDefault(); load() }}><input aria-label="PokÃ©mon name" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Try pikachu or charizard" /><button className="button primary" disabled={loading}>{loading ? 'Loadingâ€¦' : 'Search'}</button></form>
+    <p className="widget-help">Search public PokÃ©mon data and see a PokÃ©monâ€™s basic stats.</p>
+    {loading && <Loading label="Fetching PokÃ©mon dataâ€¦" />}{error && <ErrorMessage message={error} onRetry={() => load()} />}
+    {pokemon && !loading && <><div className="pokemon"><img src={pokemon.sprites?.front_default} alt="" /><div><h3>{pokemon.name}</h3><p className="meta">#{String(pokemon.id).padStart(4, '0')} Â· {pokemon.types.map((t) => t.type.name).join(' / ')}</p><p className="statline">Height {pokemon.height / 10} m Â· Weight {pokemon.weight / 10} kg</p></div></div><SourceNote>PokÃ©mon data Â· public data retrieved when you search.</SourceNote></>}
   </Card>
 }
 
-const SUITS = ['♠', '♥', '♦', '♣']
+const SUITS = ['â™ ', 'â™¥', 'â™¦', 'â™£']
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 
 function makeDeck() {
-  return SUITS.flatMap(suit => RANKS.map((rank, index) => ({ rank, suit, value: index + 2, red: suit === '♥' || suit === '♦' })))
+  return SUITS.flatMap(suit => RANKS.map((rank, index) => ({ rank, suit, value: index + 2, red: suit === 'â™¥' || suit === 'â™¦' })))
 }
 function shuffle(cards) {
   const a = [...cards]
@@ -323,7 +323,7 @@ function handName(score) { return ['High card', 'Pair', 'Two pair', 'Three of a 
 function cardText(c) { return `${c.rank}${c.suit}` }
 
 function PokerCard({ card, hidden = false }) {
-  if (hidden) return <div className="poker-card poker-back"><span>♠</span></div>
+  if (hidden) return <div className="poker-card poker-back"><span>â™ </span></div>
   return <div className={`poker-card ${card.red ? 'red' : ''}`}><b>{card.rank}</b><span>{card.suit}</span></div>
 }
 
@@ -336,11 +336,11 @@ function PokerSection() {
   const dealHand = () => {
     let deck = shuffle(makeDeck()), players = game.players.map(p => ({ ...p, hand: [deck.shift(), deck.shift()], folded: false })), bets = [0, 0, 0, 0]
     players[1].chips -= 5; bets[1] = 5; players[2].chips -= 5; bets[2] = 5
-    setGame({ ...initial(), players, deck, pot: 10, currentBet: 5, playerBet: 0, bets, street: 'preflop', status: 'Your turn - call, raise, or fold.', message: 'Blinds are $5 / $5. Play money only.' })
+    setGame({ ...initial(), players, deck, pot: 10, currentBet: 5, playerBet: 0, bets, street: 'preflop', status: 'Your turn â€” call, raise, or fold.', message: 'Blinds are $5 / $5. Play money only.' })
   }
   const finishRound = (state) => {
     const active = state.players.filter(p => !p.folded)
-    if (active.length === 1) { const idx = state.players.indexOf(active[0]); const ps = state.players.map((p, i) => i === idx ? { ...p, chips: p.chips + state.pot } : p); return { ...state, players: ps, pot: 0, gameOver: true, winner: `${active[0].name} wins $${state.pot} - everyone else folded.`, status: 'Hand complete.' } }
+    if (active.length === 1) { const idx = state.players.indexOf(active[0]); const ps = state.players.map((p, i) => i === idx ? { ...p, chips: p.chips + state.pot } : p); return { ...state, players: ps, pot: 0, gameOver: true, winner: `${active[0].name} wins $${state.pot} â€” everyone else folded.`, status: 'Hand complete.' } }
     const scored = active.map(p => ({ p, score: bestScore([...p.hand, ...state.community]) })).sort((a, b) => compareScore(b.score, a.score))
     const best = scored[0].score, winners = scored.filter(x => compareScore(x.score, best) === 0).map(x => x.p)
     const share = Math.floor(state.pot / winners.length), ps = state.players.map(p => winners.includes(p) ? { ...p, chips: p.chips + share } : p)
@@ -380,9 +380,9 @@ function PokerSection() {
     return revealStreet(s, nextStreet)
   })
   const hero = game.players[0], canAct = hero?.hand?.length && !game.gameOver
-  return <Card id="poker" eyebrow="03 · Texas Hold’em" title="Play poker in the website" actions={<button className="button secondary" onClick={dealHand}>{game.gameOver || !hero.hand.length ? 'New hand' : 'Restart'}</button>}>
-    <p className="widget-help">Play a self-contained Texas Hold’em hand against three bots. Use the action buttons when it is your turn.</p><div className="poker-shell">
-      <div className="poker-top"><span>Play money · $1,000 starting stack</span><strong>Pot ${game.pot}</strong></div>
+  return <Card id="poker" eyebrow="03 Â· Texas Holdâ€™em" title="Play poker in the website" actions={<button className="button secondary" onClick={dealHand}>{game.gameOver || !hero.hand.length ? 'New hand' : 'Restart'}</button>}>
+    <p className="widget-help">Play a self-contained Texas Holdâ€™em hand against three bots. Use the action buttons when it is your turn.</p><div className="poker-shell">
+      <div className="poker-top"><span>Play money Â· $1,000 starting stack</span><strong>Pot ${game.pot}</strong></div>
       <div className="poker-table">
         <div className="poker-opponents">{game.players.slice(1).map((p, i) => <div className={`poker-seat ${p.folded ? 'folded' : ''}`} key={p.name}><strong>{p.name}</strong><span>${p.chips}</span><div className="poker-hand-mini"><PokerCard hidden /><PokerCard hidden /></div>{p.folded && <small>Folded</small>}</div>)}</div>
         <div className="poker-community"><span className="street-label">{game.street.toUpperCase()}</span><div className="poker-cards">{game.community.map((c, i) => <PokerCard key={i} card={c} />)}</div>{!game.community.length && <div className="poker-empty">Community cards</div>}</div>
@@ -392,7 +392,7 @@ function PokerSection() {
       {!hero.hand.length && <button className="button primary poker-start" onClick={dealHand}>Deal cards</button>}
       {canAct && !game.winner && <div className="poker-actions"><button className="button secondary" onClick={() => act('fold')}>Fold</button><button className="button primary" onClick={() => act(game.currentBet > game.bets[0] ? 'call' : 'check')}>{game.currentBet > game.bets[0] ? `Call $${game.currentBet - game.bets[0]}` : 'Check'}</button><button className="button primary" onClick={() => act('raise')}>Raise +$25</button></div>}
       {game.winner && <div className="poker-result">{game.winner}</div>}
-      <p className="poker-note">A self-contained Texas Hold’em game. No real money, accounts, or external poker service are used.</p><SourceNote>Built into A Fun Time · no external data.</SourceNote>
+      <p className="poker-note">A self-contained Texas Holdâ€™em game. No real money, accounts, or external poker service are used.</p><SourceNote>Built into A Fun Time Â· no external data.</SourceNote>
     </div>
   </Card>
 }
@@ -421,11 +421,11 @@ function RadioSection() {
   }
   const filtered = stations.filter(s => `${s.name} ${s.tags || ''} ${s.countrycode || ''}`.toLowerCase().includes(search.toLowerCase().trim()))
   const play = (station) => window.dispatchEvent(new CustomEvent('aft:radio-play', { detail: { name: station.name, url: station.url_resolved, country: station.countrycode || station.tags || 'Live station' } }))
-  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
+  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
     <p className="widget-help">Search stations, filter by genre, save favorites, and keep the mini-player running while you move around the site.</p>
     <div className="radio-controls"><div className="chip-row">{['rock', 'pop', 'jazz', 'classical', 'electronic'].map(option => <button key={option} className={`button ${tag === option ? 'primary' : 'secondary'}`} onClick={() => { setTag(option); load(option) }} disabled={loading}>{option[0].toUpperCase() + option.slice(1)}</button>)}</div><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search stations" aria-label="Search radio stations" /></div>
     {favorites.length > 0 && <div className="radio-favorites"><strong>Favorites</strong><div className="list">{favorites.map(f => <div className="list-item" key={f.id}><div><strong>{f.name}</strong><span>{f.country || 'Saved station'}</span></div><button className="button secondary" onClick={() => play(f)}>Play</button></div>)}</div></div>}
-    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{filtered.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '-'} · {station.tags || tag}</span></div><div className="radio-actions"><button className="button primary" onClick={() => play(station)}>Play</button><button className={`button secondary ${favorites.some(f => f.id === station.stationuuid) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(station)} aria-label="Toggle favorite">{favorites.some(f => f.id === station.stationuuid) ? 'Saved' : 'Save'}</button></div></div>)}{!filtered.length && <EmptyState title="No matching stations.">Try a different search or genre.</EmptyState>}</div>}
+    {loading ? <Loading label={`Finding ${tag} radio stationsâ€¦`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{filtered.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || 'â€”'} Â· {station.tags || tag}</span></div><div className="radio-actions"><button className="button primary" onClick={() => play(station)}>Play</button><button className={`button secondary ${favorites.some(f => f.id === station.stationuuid) ? 'is-favorite' : ''}`} onClick={() => toggleFavorite(station)} aria-label="Toggle favorite">{favorites.some(f => f.id === station.stationuuid) ? 'Saved' : 'Save'}</button></div></div>)}{!filtered.length && <EmptyState title="No matching stations.">Try a different search or genre.</EmptyState>}</div>}
   </Card>
 }
 function QuoteSection() {
@@ -442,8 +442,8 @@ function QuoteSection() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
-  return <Card id="quote" eyebrow="05 · Quotes" title="Random quote" actions={<button className="button secondary" onClick={load} disabled={loading}>New quote</button>}>
-    {loading ? <Loading label="Finding a quote…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : quote ? <><blockquote className="quote">{quote.content}<cite>- {quote.author}</cite></blockquote><SourceNote>DummyJSON Quotes · sample quote data, fetched when requested.</SourceNote></> : <EmptyState title="No quote is available.">Try New quote to request another.</EmptyState>}
+  return <Card id="quote" eyebrow="05 Â· Quotes" title="Random quote" actions={<button className="button secondary" onClick={load} disabled={loading}>New quote</button>}>
+    {loading ? <Loading label="Finding a quoteâ€¦" /> : error ? <ErrorMessage message={error} onRetry={load} /> : quote ? <><blockquote className="quote">â€œ{quote.content}â€<cite>â€” {quote.author}</cite></blockquote><SourceNote>DummyJSON Quotes Â· sample quote data, fetched when requested.</SourceNote></> : <EmptyState title="No quote is available.">Try New quote to request another.</EmptyState>}
   </Card>
 }
 
@@ -475,8 +475,8 @@ function LexiconSection() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
-  return <Card id="word" eyebrow="06 · Random Word" title="Random word" actions={<button className="button secondary" onClick={load} disabled={loading}>Randomise</button>}>
-    {loading ? <Loading label="Generating a random word…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : word ? <><div className="lexicon"><span>{word}</span><small>{source}</small></div><SourceNote>{source} · random word requested from the public endpoint.</SourceNote></> : <EmptyState title="No word is available.">Try Randomise to request another.</EmptyState>}
+  return <Card id="word" eyebrow="06 Â· Random Word" title="Random word" actions={<button className="button secondary" onClick={load} disabled={loading}>Randomise</button>}>
+    {loading ? <Loading label="Generating a random wordâ€¦" /> : error ? <ErrorMessage message={error} onRetry={load} /> : word ? <><div className="lexicon"><span>{word}</span><small>{source}</small></div><SourceNote>{source} Â· random word requested from the public endpoint.</SourceNote></> : <EmptyState title="No word is available.">Try Randomise to request another.</EmptyState>}
   </Card>
 }
 
@@ -493,8 +493,8 @@ function RedditSection() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
-  return <Card id="sentiment" eyebrow="07 · Tradestie" title="Reddit market sentiment" actions={<button className="button secondary" onClick={load} disabled={loading}>Refresh</button>}>
-    {loading ? <Loading label="Loading Reddit sentiment…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : rows.length ? <><p className="widget-help">See which stocks are being discussed most on WallStreetBets and whether the collected sentiment is bullish or bearish.</p><div className="table-wrap"><table><caption className="sr-only">Reddit market sentiment</caption><thead><tr><th>Ticker</th><th>Sentiment</th><th>Score</th><th>Comments</th></tr></thead><tbody>{rows.slice(0, 10).map((r, i) => <tr key={`${r.ticker}-${i}`}><td>{r.ticker}</td><td><span className={`pill ${String(r.sentiment).toLowerCase()}`}>{r.sentiment}</span></td><td>{Number(r.sentiment_score).toFixed(2)}</td><td>{r.no_of_comments}</td></tr>)}</tbody></table></div><SourceNote>Tradestie Reddit · data is updated about every 15 minutes.</SourceNote></> : <EmptyState title="No sentiment data was returned.">Try Refresh to request the latest available snapshot.</EmptyState>}
+  return <Card id="sentiment" eyebrow="07 Â· Tradestie" title="Reddit market sentiment" actions={<button className="button secondary" onClick={load} disabled={loading}>Refresh</button>}>
+    {loading ? <Loading label="Loading Reddit sentimentâ€¦" /> : error ? <ErrorMessage message={error} onRetry={load} /> : rows.length ? <><p className="widget-help">See which stocks are being discussed most on WallStreetBets and whether the collected sentiment is bullish or bearish.</p><div className="table-wrap"><table><caption className="sr-only">Reddit market sentiment</caption><thead><tr><th>Ticker</th><th>Sentiment</th><th>Score</th><th>Comments</th></tr></thead><tbody>{rows.slice(0, 10).map((r, i) => <tr key={`${r.ticker}-${i}`}><td>{r.ticker}</td><td><span className={`pill ${String(r.sentiment).toLowerCase()}`}>{r.sentiment}</span></td><td>{Number(r.sentiment_score).toFixed(2)}</td><td>{r.no_of_comments}</td></tr>)}</tbody></table></div><SourceNote>Tradestie Reddit Â· data is updated about every 15 minutes.</SourceNote></> : <EmptyState title="No sentiment data was returned.">Try Refresh to request the latest available snapshot.</EmptyState>}
   </Card>
 }
 
@@ -520,7 +520,7 @@ function SocialSection({ currentUserId }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [pinned, setPinned] = useState([])
 
-  const reactionChoices = ['ðŸ‘', '❤️', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢']
+  const reactionChoices = ['ðŸ‘', 'â¤ï¸', 'ðŸ˜‚', 'ðŸ˜®', 'ðŸ˜¢']
   const draftKey = selected ? `aft-chat-draft:${currentUserId}:${selected.id}` : ''
 
   const loadConnections = useCallback(async () => {
@@ -701,9 +701,9 @@ function SocialSection({ currentUserId }) {
     return current - previous > 5 * 60 * 1000
   }
 
-  return <Card id="community" eyebrow="10 · Community" title="Find users & chat">
+  return <Card id="community" eyebrow="10 Â· Community" title="Find users & chat">
     <p className="widget-help">Search usernames, connect with people, and use private chat. Double-click a message for quick actions.</p>
-    <form className="input-row" onSubmit={searchUsers}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a username" aria-label="Search community usernames" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button></form>
+    <form className="input-row" onSubmit={searchUsers}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a username" aria-label="Search community usernames" /><button className="button primary" disabled={loading}>{loading ? 'Searchingâ€¦' : 'Search'}</button></form>
     {error && <p className="status notice" role="status" aria-live="polite">{error}</p>}
     <div className="social-layout">
       <div>
@@ -712,15 +712,15 @@ function SocialSection({ currentUserId }) {
         <h3 className="subheading">Incoming requests</h3>
         <div className="user-list">{pending.map(c => <div className="user-row" key={c.id}><div><strong>{c.sender.username}</strong><span>Wants to connect</span></div><div className="actions"><button className="button secondary" onClick={() => respondToRequest(c.id, 'accepted')}>Accept</button><button className="button secondary" onClick={() => respondToRequest(c.id, 'rejected')}>Decline</button></div></div>)}{!pending.length && <EmptyState title="No pending requests.">New incoming connection requests will appear here.</EmptyState>}</div>
         <h3 className="subheading">Connections</h3>
-        <div className="user-list">{connections.map(c => { const other = c.sender_id === currentUserId ? c.receiver : c.sender; return <button className={`user-row chat-select ${selected?.id === other.id ? 'selected' : ''}`} key={c.id} onClick={() => openChat(other)}><div><strong>{other.username}</strong><span>Connected · Open chat</span></div><span>›</span></button> })}{!connections.length && <EmptyState title="No connections yet.">Search for someone above and send a connection request to start building your community.</EmptyState>}</div>
+        <div className="user-list">{connections.map(c => { const other = c.sender_id === currentUserId ? c.receiver : c.sender; return <button className={`user-row chat-select ${selected?.id === other.id ? 'selected' : ''}`} key={c.id} onClick={() => openChat(other)}><div><strong>{other.username}</strong><span>Connected Â· Open chat</span></div><span>â€º</span></button> })}{!connections.length && <EmptyState title="No connections yet.">Search for someone above and send a connection request to start building your community.</EmptyState>}</div>
       </div>
       <div className="chat-box">
         {selected ? <>
-          <div className="chat-header"><div><strong>Chat with {selected.username}</strong>{typing && <span className="typing-indicator">typing…</span>}</div><div className="chat-header-actions"><button className="chat-profile-button" onClick={() => setProfileOpen(v => !v)}>Profile</button><span className="chat-live"><i /> Live</span><button className="chat-close-button" type="button" aria-label="Close chat" onClick={() => { setSelected(null); setMessages([]); setProfileOpen(false) }}>Ã—</button></div></div>
-          {profileOpen && <div className="chat-profile-panel">{selected.avatar_url && <img className="profile-avatar" src={selected.avatar_url} alt="" />}<strong>{selected.username}</strong>{selected.bio && <p>{selected.bio}</p>}{selected.interests && <span>Interests: {selected.interests}</span>}<span>Joined {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'recently'}</span><small>Private chat · shared media and chat settings.</small><div className="shared-media"><strong>Shared media</strong>{messages.filter(m => m.attachment_url).length ? messages.filter(m => m.attachment_url).slice(-6).map(m => <a key={m.id} href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Attachment'}</a>) : <span>No shared files yet.</span>}</div></div>}
+          <div className="chat-header"><div><strong>Chat with {selected.username}</strong>{typing && <span className="typing-indicator">typingâ€¦</span>}</div><div className="chat-header-actions"><button className="chat-profile-button" onClick={() => setProfileOpen(v => !v)}>Profile</button><span className="chat-live"><i /> Live</span><button className="chat-close-button" type="button" aria-label="Close chat" onClick={() => { setSelected(null); setMessages([]); setProfileOpen(false) }}>Ã—</button></div></div>
+          {profileOpen && <div className="chat-profile-panel">{selected.avatar_url && <img className="profile-avatar" src={selected.avatar_url} alt="" />}<strong>{selected.username}</strong>{selected.bio && <p>{selected.bio}</p>}{selected.interests && <span>Interests: {selected.interests}</span>}<span>Joined {selected.created_at ? new Date(selected.created_at).toLocaleDateString() : 'recently'}</span><small>Private chat Â· shared media and chat settings.</small><div className="shared-media"><strong>Shared media</strong>{messages.filter(m => m.attachment_url).length ? messages.filter(m => m.attachment_url).slice(-6).map(m => <a key={m.id} href={m.attachment_url} target="_blank" rel="noreferrer">{m.attachment_name || 'Attachment'}</a>) : <span>No shared files yet.</span>}</div></div>}
           {pinned.length > 0 && <div className="pinned-strip"><strong>Pinned</strong>{pinned.slice(-3).map(m => <button key={m.id} onClick={() => document.getElementById(`message-${m.id}`)?.scrollIntoView({ behavior: 'smooth' })}>{m.body || m.attachment_name}</button>)}</div>}
           <div className="chat-tools"><input value={searchMessages} onChange={e => setSearchMessages(e.target.value)} placeholder="Search messages" aria-label="Search messages" /><span>{filteredMessages.length} messages</span></div>
-          {chatLoading ? <Loading label="Loading chat…" /> : <div className="messages">{filteredMessages.map((m, i) => {
+          {chatLoading ? <Loading label="Loading chatâ€¦" /> : <div className="messages">{filteredMessages.map((m, i) => {
             const mine = m.sender_id === currentUserId
             const reply = getReply(m.reply_to_id)
             return <div id={`message-${m.id}`} key={m.id} className={`message-wrap ${mine ? 'mine' : ''}`}>
@@ -745,7 +745,7 @@ function SocialSection({ currentUserId }) {
           })}{!filteredMessages.length && <EmptyState title={searchMessages ? 'No matching messages.' : 'No messages yet.'}>{searchMessages ? 'Try another search.' : 'Say hello to start the conversation.'}</EmptyState>}</div>}
           {editingId && <div className="edit-compose"><input value={editingText} onChange={e => setEditingText(e.target.value)} /><button className="button primary" onClick={() => saveEdit(editingId)}>Save</button><button className="button secondary" onClick={() => setEditingId(null)}>Cancel</button></div>}
           {replyTo && <div className="reply-compose"><span>Replying to: {replyTo.body}</span><button onClick={() => setReplyTo(null)}>Ã—</button></div>}
-          <form className="chat-compose" onSubmit={sendMessage}><label className="attach-button" title="Share a photo, video, or file">ï¼‹<input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip" onChange={e => uploadAttachment(e.target.files?.[0])} hidden /></label><input value={message} onChange={e => updateTyping(e.target.value)} placeholder="Write a message…" aria-label="Message" /><button className="button primary">Send</button></form>
+          <form className="chat-compose" onSubmit={sendMessage}><label className="attach-button" title="Share a photo, video, or file">ï¼‹<input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip" onChange={e => uploadAttachment(e.target.files?.[0])} hidden /></label><input value={message} onChange={e => updateTyping(e.target.value)} placeholder="Write a messageâ€¦" aria-label="Message" /><button className="button primary">Send</button></form>
         </> : <div className="chat-empty"><strong>Select a connection</strong><p>Choose an accepted connection to start a private chat.</p></div>}
       </div>
     </div><SourceNote>Community data is stored in your account. Chat supports delivery/read states, typing, replies, edits, deletion, reactions, attachments, search, and drafts.</SourceNote>
@@ -831,18 +831,18 @@ function DiscoverSection() {
     if (!data) return null
     if (data.fallback) return <p className="feature-text muted-result">{data.fallback}</p>
     if (kind === 'fact') return <p className="feature-text">{data.fact || data.text || data.data || 'No fact returned.'}</p>
-    if (kind === 'joke') return <p className="feature-text">{data.type === 'twopart' ? `${data.setup} - ${data.delivery}` : data.joke}</p>
+    if (kind === 'joke') return <p className="feature-text">{data.type === 'twopart' ? `${data.setup} â€” ${data.delivery}` : data.joke}</p>
     if (kind === 'dad') return <p className="feature-text">{data.joke}</p>
     if (kind === 'advice') return <p className="feature-text">{data.slip?.advice || data.advice}</p>
-    if (kind === 'quotable') return <blockquote className="quote">{data.content}<cite>- {data.author}</cite></blockquote>
-    if (kind === 'kanye') return <p className="feature-text">{data.quote}</p>
-    if (kind === 'zen') { const q = Array.isArray(data) ? data[0] : data; return <blockquote className="quote">{q.q}<cite>- {q.a}</cite></blockquote> }
+    if (kind === 'quotable') return <blockquote className="quote">â€œ{data.content}â€<cite>â€” {data.author}</cite></blockquote>
+    if (kind === 'kanye') return <p className="feature-text">â€œ{data.quote}â€</p>
+    if (kind === 'zen') { const q = Array.isArray(data) ? data[0] : data; return <blockquote className="quote">â€œ{q.q}â€<cite>â€” {q.a}</cite></blockquote> }
     return null
   }
   const options = [['fact', 'Fun fact'], ['joke', 'Jokes'], ['dad', 'Dad jokes'], ['advice', 'Advice'], ['quotable', 'Quotes'], ['kanye', 'Kanye'], ['zen', 'Zen quotes']]
-  return <Card eyebrow="DISCOVER" title="Random things worth discovering" actions={<button className="button secondary" onClick={() => load(kind)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
+  return <Card eyebrow="DISCOVER" title="Random things worth discovering" actions={<button className="button secondary" onClick={() => load(kind)} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
     <div className="chip-row">{options.map(([value, label]) => <button key={value} className={`button ${kind === value ? 'primary' : 'secondary'}`} onClick={() => { setKind(value); load(value) }}>{label}</button>)}</div>
-    {loading ? <Loading label="Finding something…" /> : <div className="feature-result">{render()}</div>}
+    {loading ? <Loading label="Finding somethingâ€¦" /> : <div className="feature-result">{render()}</div>}
   </Card>
 }
 
@@ -883,16 +883,16 @@ function WordLabSection() {
   return <Card eyebrow="WORDS" title="Word explorer">
     <form className="word-search" onSubmit={search}>
       <label htmlFor="word-search-input">Search for a word</label>
-      <div className="input-row"><input id="word-search-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Enter a word." autoComplete="off" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Explore'}</button></div>
+      <div className="input-row"><input id="word-search-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Enter a word." autoComplete="off" /><button className="button primary" disabled={loading}>{loading ? 'Searchingâ€¦' : 'Explore'}</button></div>
     </form>
     {!loading && !entry && !related.length && !error && <EmptyState title="Start with a word.">Search for a word to see definitions, pronunciation, examples, and related words.</EmptyState>}
-    {loading && <Loading label={`Exploring ${query.trim()}…`} />}
+    {loading && <Loading label={`Exploring â€œ${query.trim()}â€â€¦`} />}
     {error && <ErrorMessage message={error} onRetry={() => search()} />}
     {!loading && (entry || related.length > 0) && <div className="word-result">
       {entry && <div className="word-definition-panel">
         <div className="word-result-head"><div><h3>{entry.word}</h3>{pronunciation && <p className="pronunciation">{pronunciation}</p>}</div><span className="word-language">English</span></div>
         <div className="definition-list">{definitions.map((d, i) => <article key={i}><span>{d.part || 'Definition'}</span><p>{d.text}</p></article>)}</div>
-        {examples.length > 0 && <div className="word-examples"><h4>Examples</h4>{examples.map((x, i) => <p key={i}>{x}</p>)}</div>}
+        {examples.length > 0 && <div className="word-examples"><h4>Examples</h4>{examples.map((x, i) => <p key={i}>â€œ{x}â€</p>)}</div>}
       </div>}
       <div className="word-related"><h4>Related words</h4>{related.length ? <div className="chip-row word-results">{related.map(w => <button type="button" className="pill word-pill" key={w.word} onClick={() => { setQuery(w.word); setTimeout(() => document.getElementById('word-search-input')?.focus(), 0) }}>{w.word}</button>)}</div> : <p className="muted-inline">No related words were returned.</p>}</div>
     </div>}
@@ -933,14 +933,14 @@ function TriviaCard() {
   }
   const next = () => { setSelected(null); setIndex(v => v + 1) }
 
-  return <MiniTool title="Trivia" source="Open Trivia" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : questions.length ? 'Restart' : 'Start quiz'}</button>}>
-    {loading ? <Loading label="Preparing 10 questions…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : current ? <div className="trivia-game">
+  return <MiniTool title="Trivia" source="Open Trivia" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loadingâ€¦' : questions.length ? 'Restart' : 'Start quiz'}</button>}>
+    {loading ? <Loading label="Preparing 10 questionsâ€¦" /> : error ? <ErrorMessage message={error} onRetry={load} /> : current ? <div className="trivia-game">
       <div className="trivia-topline"><span>Question {index + 1} of {questions.length}</span><strong>Score {score}</strong></div>
       <div className="trivia-progress" aria-label={`Question ${index + 1} of ${questions.length}`}><span style={{ width: `${((index + 1) / questions.length) * 100}%` }} /></div>
       <div className="trivia-meta"><span>{current.category}</span><span>{current.difficulty}</span></div>
       <p className="feature-text trivia-question">{current.question}</p>
       <div className="trivia-options">{current.answers.map((answer, i) => { const correct = answer === current.correct; const picked = selected === answer; return <button key={`${answer}-${i}`} type="button" className={`trivia-option ${selected ? (correct ? 'correct' : picked ? 'wrong' : '') : ''}`} onClick={() => choose(answer)} disabled={selected !== null}><span>{String.fromCharCode(65 + i)}</span>{answer}</button> })}</div>
-      {selected !== null && <div className={`trivia-feedback ${selected === current.correct ? 'correct-text' : 'wrong-text'}`}><strong>{selected === current.correct ? 'Correct.' : 'Not quite.'}</strong><span>{selected === current.correct ? 'Good one.' : `The correct answer is ${current.correct}.`}</span>{index < questions.length - 1 ? <button className="button secondary" onClick={next}>Next question</button> : <button className="button primary" onClick={load}>Play again · {score}/{questions.length}</button>}</div>}
+      {selected !== null && <div className={`trivia-feedback ${selected === current.correct ? 'correct-text' : 'wrong-text'}`}><strong>{selected === current.correct ? 'Correct.' : 'Not quite.'}</strong><span>{selected === current.correct ? 'Good one.' : `The correct answer is ${current.correct}.`}</span>{index < questions.length - 1 ? <button className="button secondary" onClick={next}>Next question</button> : <button className="button primary" onClick={load}>Play again Â· {score}/{questions.length}</button>}</div>}
     </div> : <EmptyState title="Ready when you are.">Start a 10-question quiz with progress and scoring.</EmptyState>}
   </MiniTool>
 }
@@ -950,8 +950,8 @@ function FreeGameCard() {
   const load = async () => { setLoading(true); setDetail(null); try { const games = await fetchJson(SOURCES.games); const list = Array.isArray(games) ? games.filter(g => g && g.title) : []; setGame(list[Math.floor(Math.random() * list.length)] || null) } catch { setGame(null) } finally { setLoading(false) } }
   const open = async () => { if (!game?.id) return; setDetailLoading(true); try { setDetail(await fetchJson(SOURCES.gameDetail(game.id))) } catch { setDetail(game) } finally { setDetailLoading(false) } }
   useEffect(() => { load() }, [])
-  return <MiniTool title={game?.title || 'Free-to-play game'} source="FreeToGame" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
-    {game ? <><div className="game-card-body">{game.thumbnail && <img className="game-image" src={game.thumbnail} alt={game.title} />}<div><p>{game.short_description}</p><p className="meta">{game.genre || 'Game'} · {game.platform || 'Multiple platforms'}</p><button className="button primary" onClick={open} disabled={detailLoading}>{detailLoading ? 'Loading details…' : 'View details'}</button></div></div>{detail && <div className="game-detail"><h4>{detail.title}</h4>{detail.description && <p>{detail.description}</p>}{detail.instructions && <p><strong>How to play:</strong> {detail.instructions}</p>}{detail.screenshots?.slice(0, 2).map((s, i) => <img key={i} className="game-screenshot" src={s.image} alt={`${detail.title} screenshot ${i + 1}`} />)}</div>}</> : <p className="muted-inline">No game is available right now.</p>}
+  return <MiniTool title={game?.title || 'Free-to-play game'} source="FreeToGame" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
+    {game ? <><div className="game-card-body">{game.thumbnail && <img className="game-image" src={game.thumbnail} alt={game.title} />}<div><p>{game.short_description}</p><p className="meta">{game.genre || 'Game'} Â· {game.platform || 'Multiple platforms'}</p><button className="button primary" onClick={open} disabled={detailLoading}>{detailLoading ? 'Loading detailsâ€¦' : 'View details'}</button></div></div>{detail && <div className="game-detail"><h4>{detail.title}</h4>{detail.description && <p>{detail.description}</p>}{detail.instructions && <p><strong>How to play:</strong> {detail.instructions}</p>}{detail.screenshots?.slice(0, 2).map((s, i) => <img key={i} className="game-screenshot" src={s.image} alt={`${detail.title} screenshot ${i + 1}`} />)}</div>}</> : <p className="muted-inline">No game is available right now.</p>}
   </MiniTool>
 }
 
@@ -959,8 +959,8 @@ function RickCard() {
   const [character, setCharacter] = useState(null), [loading, setLoading] = useState(false)
   const load = async () => { setLoading(true); try { const x = await fetchJson(SOURCES.rick); const list = x.results || []; setCharacter(list[Math.floor(Math.random() * list.length)] || null) } catch { setCharacter(null) } finally { setLoading(false) } }
   useEffect(() => { load() }, [])
-  return <MiniTool title={character?.name || 'Rick & Morty'} source="Rick & Morty" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
-    {character ? <div className="character-card"><img className="character-image" src={character.image} alt={`Picture of ${character.name}`} /><div><h4>{character.name}</h4><p>{character.name} is a {character.status.toLowerCase()} {character.species.toLowerCase()}.</p><p className="meta">Origin: {character.origin?.name || 'Unknown'} · Location: {character.location?.name || 'Unknown'}</p></div></div> : <p className="muted-inline">No character is available right now.</p>}
+  return <MiniTool title={character?.name || 'Rick & Morty'} source="Rick & Morty" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
+    {character ? <div className="character-card"><img className="character-image" src={character.image} alt={`Picture of ${character.name}`} /><div><h4>{character.name}</h4><p>{character.name} is a {character.status.toLowerCase()} {character.species.toLowerCase()}.</p><p className="meta">Origin: {character.origin?.name || 'Unknown'} Â· Location: {character.location?.name || 'Unknown'}</p></div></div> : <p className="muted-inline">No character is available right now.</p>}
   </MiniTool>
 }
 
@@ -997,13 +997,13 @@ function MusicSection() {
     load(nextTag)
   }
 
-  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
+  return <Card eyebrow="MUSIC" title="Basic radio" actions={<button className="button secondary" onClick={() => load(tag)} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
     <p className="widget-help">Pick a genre and play a live station directly in A Fun Time. No song search or lyrics lookup is needed.</p>
     <div className="chip-row">
       {['rock', 'pop', 'jazz', 'classical', 'electronic'].map(option => <button key={option} className={`button ${tag === option ? 'primary' : 'secondary'}`} onClick={() => changeGenre(option)} disabled={loading}>{option[0].toUpperCase() + option.slice(1)}</button>)}
     </div>
-    {loading ? <Loading label={`Finding ${tag} radio stations…`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{stations.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || '-'} · {station.tags || tag}</span></div><audio controls preload="none" src={station.url_resolved} aria-label={`Play ${station.name}`} /></div>)}</div>}
-    {!loading && !error && stations.length > 0 && <SourceNote>Radio Browser · live station directory.</SourceNote>}
+    {loading ? <Loading label={`Finding ${tag} radio stationsâ€¦`} /> : error ? <ErrorMessage message={error} onRetry={() => load(tag)} /> : <div className="list">{stations.map(station => <div className="list-item radio-station" key={station.stationuuid}><div><strong>{station.name}</strong><span>{station.countrycode || 'â€”'} Â· {station.tags || tag}</span></div><audio controls preload="none" src={station.url_resolved} aria-label={`Play ${station.name}`} /></div>)}</div>}
+    {!loading && !error && stations.length > 0 && <SourceNote>Radio Browser Â· live station directory.</SourceNote>}
   </Card>
 }
 
@@ -1027,10 +1027,10 @@ function NewsSection() {
   const openArticle = (x) => setArticle(x)
   const articleIndex = filtered.findIndex(x => x.url === article?.url)
   const moveArticle = (delta) => { const next = filtered[articleIndex + delta]; if (next) setArticle(next) }
-  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>}>
+  return <Card eyebrow="NEWS" title="Fresh stories" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Refreshingâ€¦' : 'Refresh'}</button>}>
     <p className="widget-help">Browse stories by source, search titles, sort them, and save anything you want to return to later.</p>
     <div className="story-tools"><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search stories" aria-label="Search stories" /><select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} aria-label="Filter stories by source">{sources.map(x => <option key={x} value={x}>{x === 'all' ? 'All sources' : x}</option>)}</select><select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort stories"><option value="newest">Newest</option><option value="title">Title</option></select></div>
-    {loading ? <Loading label="Loading stories…" /> : error ? <ErrorMessage message={error} onRetry={load} /> : article ? <div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3><small>{article.author || article.source}{article.date ? ' · ' + new Date(article.date).toLocaleDateString() : ''} · 3 min read</small></div><button className="button secondary" onClick={() => setArticle(null)}>Close</button></div>{article.image && <img className="article-image" src={article.image} alt={article.title} />}<p className="article-summary">{article.summary || 'This source did not provide a summary.'}</p><div className="article-actions"><button className="button secondary" onClick={() => saveArticle(article)}>{saved.some(s => s.key === article.url) ? 'Saved' : 'Save'}</button><button className="button secondary" onClick={() => navigator.clipboard?.writeText(article.url)}>Share</button><button className="button secondary" disabled={articleIndex <= 0} onClick={() => moveArticle(-1)}>Previous</button><button className="button secondary" disabled={articleIndex < 0 || articleIndex >= filtered.length - 1} onClick={() => moveArticle(1)}>Next</button><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read source</a></div></div> : <div className="news-list">{filtered.slice(0, 20).map((x, i) => <button className="news-item" key={`${x.url}-${i}`} onClick={() => openArticle(x)}><div>{x.image && <img className="news-thumb" src={x.image} alt="" />}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date ? ' · ' + new Date(x.date).toLocaleDateString() : ''} · 3 min read</small></span></div><span className="news-read">{saved.some(s => s.key === x.url) ? 'Saved' : 'Read'}</span></button>)}{!filtered.length && <EmptyState title="No matching stories.">Try another search or filter.</EmptyState>}</div>}
+    {loading ? <Loading label="Loading storiesâ€¦" /> : error ? <ErrorMessage message={error} onRetry={load} /> : article ? <div className="article-reader"><div className="article-reader-head"><div><p className="eyebrow">{article.source}</p><h3>{article.title}</h3><small>{article.author || article.source}{article.date ? ' Â· ' + new Date(article.date).toLocaleDateString() : ''} Â· 3 min read</small></div><button className="button secondary" onClick={() => setArticle(null)}>Close</button></div>{article.image && <img className="article-image" src={article.image} alt={article.title} />}<p className="article-summary">{article.summary || 'This source did not provide a summary.'}</p><div className="article-actions"><button className="button secondary" onClick={() => saveArticle(article)}>{saved.some(s => s.key === article.url) ? 'Saved' : 'Save'}</button><button className="button secondary" onClick={() => navigator.clipboard?.writeText(article.url)}>Share</button><button className="button secondary" disabled={articleIndex <= 0} onClick={() => moveArticle(-1)}>Previous</button><button className="button secondary" disabled={articleIndex < 0 || articleIndex >= filtered.length - 1} onClick={() => moveArticle(1)}>Next</button><a className="button primary" href={article.url} target="_blank" rel="noreferrer">Read source</a></div></div> : <div className="news-list">{filtered.slice(0, 20).map((x, i) => <button className="news-item" key={`${x.url}-${i}`} onClick={() => openArticle(x)}><div>{x.image && <img className="news-thumb" src={x.image} alt="" />}<span className="news-copy"><strong>{x.title}</strong><small>{x.source}{x.date ? ' Â· ' + new Date(x.date).toLocaleDateString() : ''} Â· 3 min read</small></span></div><span className="news-read">{saved.some(s => s.key === x.url) ? 'Saved' : 'Read'}</span></button>)}{!filtered.length && <EmptyState title="No matching stories.">Try another search or filter.</EmptyState>}</div>}
   </Card>
 }
 function FoodSection() {
@@ -1041,9 +1041,9 @@ function FoodSection() {
   const scaleMeasure = (measure) => { if (!measure) return ''; const match = measure.match(/^([0-9]+(?:\.[0-9]+)?)(.*)$/); if (!match) return measure; const value = Number(match[1]) * (servings / 2); const rounded = Number.isInteger(value) ? value : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); return `${rounded}${match[2]}` }; const ingredients = selected ? Array.from({ length: 20 }, (_, i) => i + 1).map(i => ({ ingredient: selected[`strIngredient${i}`]?.trim(), measure: scaleMeasure(selected[`strMeasure${i}`]?.trim()) })).filter(x => x.ingredient) : []
   const saveRecipe = () => { if (!selected) return; const key = `recipe:${selected.idMeal}`; const next = saved.some(s => s.key === key) ? saved.filter(s => s.key !== key) : [...saved, { key, type: 'recipe', title: selected.strMeal, data: selected }]; setSaved(next); localStorage.setItem('aft-saved-items', JSON.stringify(next)) }
   const print = () => window.print()
-  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh recipe'}</button>}>
+  return <Card eyebrow="FOOD" title="Recipes" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh recipe'}</button>}>
     <p className="widget-help">Open a recipe, scale it to your serving size, check ingredients as you go, or switch to cooking mode.</p>
-    {loading ? <Loading label="Finding a recipe…" /> : <div className="food-grid">{meals.map(meal => <button type="button" className="food-card" key={meal.idMeal} onClick={() => { setSelected(meal); setServings(2); setChecked({}) }}><img src={meal.strMealThumb} alt={meal.strMeal} /><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} · {meal.strArea}</small></span></button>)}</div>}
+    {loading ? <Loading label="Finding a recipeâ€¦" /> : <div className="food-grid">{meals.map(meal => <button type="button" className="food-card" key={meal.idMeal} onClick={() => { setSelected(meal); setServings(2); setChecked({}) }}><img src={meal.strMealThumb} alt={meal.strMeal} /><span><strong>{meal.strMeal}</strong><small>{meal.strCategory} Â· {meal.strArea}</small></span></button>)}</div>}
     {selected && <div className={`recipe-panel ${cookingMode ? 'cooking-mode' : ''}`}><div className="recipe-head"><div><p className="eyebrow">RECIPE</p><h3>{selected.strMeal}</h3><div className="recipe-meta"><span>Difficulty: source-dependent</span><span>Time: source-dependent</span><span>Servings <input className="servings-input" type="number" min="1" max="20" value={servings} onChange={e => setServings(Math.max(1, Number(e.target.value) || 1))} /></span></div></div><div className="recipe-actions"><button className="button secondary" onClick={() => setCookingMode(v => !v)}>{cookingMode ? 'Exit cooking mode' : 'Cooking mode'}</button><button className="button secondary" onClick={print}>Print</button><button className="button secondary" onClick={saveRecipe}>{saved.some(s => s.key === `recipe:${selected.idMeal}`) ? 'Saved' : 'Save'}</button><button className="button secondary" onClick={() => setSelected(null)}>Close</button></div></div><button className="jump-recipe" onClick={() => document.getElementById('ingredients')?.scrollIntoView({ behavior: 'smooth' })}>Jump to ingredients</button><div className="recipe-layout"><img className="recipe-image" src={selected.strMealThumb} alt={selected.strMeal} /><div><h4 id="ingredients">Ingredients</h4><ul className="ingredients">{ingredients.map((x, i) => <li key={i}><label className="ingredient-check"><input type="checkbox" checked={!!checked[i]} onChange={e => setChecked(v => ({ ...v, [i]: e.target.checked }))} /><span>{x.measure ? `${x.measure} ` : ''}{x.ingredient}</span></label></li>)}</ul></div></div><h4>Instructions</h4><p className="recipe-instructions">{selected.strInstructions}</p><p className="source-note">Preparation/cooking time, dietary labels, allergens, and difficulty are shown only when the source supplies reliable values.</p></div>}
   </Card>
 }
@@ -1058,8 +1058,8 @@ function FunOdditiesSection() {
   const [items, setItems] = useState([]), [loading, setLoading] = useState(false)
   const load = async () => { setLoading(true); const results = await Promise.allSettled([fetchJson(SOURCES.axolotl), fetchJson(SOURCES.insult), fetchJson(SOURCES.ghibli)]); const next = []; if (results[0].status === 'fulfilled') { const v = results[0].value; next.push({ title: 'Axolotl', text: 'A random axolotl from the animal source.', image: v?.url || v?.image }) } if (results[1].status === 'fulfilled') { const v = results[1].value; next.push({ title: 'Unexpected insult', text: v?.insult || v }) } if (results[2].status === 'fulfilled') { const films = results[2].value || []; const film = films[Math.floor(Math.random() * films.length)]; if (film) next.push({ title: film.title, text: film.description || 'A randomly selected Studio Ghibli film.', image: film.image }) } if (!next.length) { const [title, text] = fallback[Math.floor(Math.random() * fallback.length)]; next.push({ title, text }) } setItems(next); setLoading(false) }
   useEffect(() => { load() }, [])
-  return <Card eyebrow="ODDITIES" title="Things you probably didn't know" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>}>
-    {loading ? <Loading label="Finding something strange…" /> : <ToolGrid>{items.map((item, i) => <MiniTool key={i} title={item.title} source="Oddity"><>{item.image && <img className="oddity-image" src={item.image} alt={item.title} />}<p className="feature-text">{item.text}</p></></MiniTool>)}</ToolGrid>}
+  return <Card eyebrow="ODDITIES" title="Things you probably didn't know" actions={<button className="button secondary" onClick={load} disabled={loading}>{loading ? 'Loadingâ€¦' : 'Refresh'}</button>}>
+    {loading ? <Loading label="Finding something strangeâ€¦" /> : <ToolGrid>{items.map((item, i) => <MiniTool key={i} title={item.title} source="Oddity"><>{item.image && <img className="oddity-image" src={item.image} alt={item.title} />}<p className="feature-text">{item.text}</p></></MiniTool>)}</ToolGrid>}
   </Card>
 }
 
@@ -1193,13 +1193,6 @@ function avatarDataUri(seed) {
 }
 
 function SettingsPage({ currentUserId }) {
-  const defaultSections = {
-    interests: true,
-    achievements: true,
-    memberSince: true,
-    completion: true
-  }
-
   const [profile, setProfile] = useState({
     username: '',
     display_name: '',
@@ -1208,43 +1201,28 @@ function SettingsPage({ currentUserId }) {
     avatar_preset: 'pixel-01',
     accent_color: '#39ff14',
     banner_preset: 'default',
-    profile_sections: defaultSections
+    profile_sections: { interests: true, favoriteWords: true, achievements: true }
   })
-  const [createdAt, setCreatedAt] = useState(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [avatarOpen, setAvatarOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
-
-  const selectedAvatar = PROFILE_AVATARS.find(a => a[0] === profile.avatar_preset) || PROFILE_AVATARS[0]
-  const selectedAvatarUri = useMemo(() => avatarDataUri(selectedAvatar[2]), [selectedAvatar])
 
   useEffect(() => {
     let active = true
-
     async function loadProfile() {
       if (!currentUserId) return
       setLoading(true)
-
       const { data, error } = await supabase
         .from('profiles')
-        .select('username,bio,interests,display_name,avatar_preset,accent_color,banner_preset,profile_sections,created_at')
+        .select('username,bio,interests,display_name,avatar_preset,accent_color,banner_preset,profile_sections')
         .eq('id', currentUserId)
         .single()
-
       if (!active) return
-
-      let fallbackCreatedAt = null
-      if (!data?.created_at) {
-        const { data: authData } = await supabase.auth.getUser()
-        fallbackCreatedAt = authData?.user?.created_at || null
-      }
-
       if (error) {
         setMessage('Could not load profile details.')
       } else if (data) {
-        setCreatedAt(data.created_at || fallbackCreatedAt)
         setProfile({
           username: data.username || '',
           display_name: data.display_name || data.username || '',
@@ -1255,29 +1233,24 @@ function SettingsPage({ currentUserId }) {
           banner_preset: PROFILE_BANNERS.some(b => b[0] === data.banner_preset) ? data.banner_preset : 'default',
           profile_sections: {
             interests: data.profile_sections?.interests !== false,
-            achievements: data.profile_sections?.achievements !== false,
-            memberSince: data.profile_sections?.memberSince !== false,
-            completion: data.profile_sections?.completion !== false
+            favoriteWords: data.profile_sections?.favoriteWords !== false,
+            achievements: data.profile_sections?.achievements !== false
           }
         })
-      } else {
-        setCreatedAt(fallbackCreatedAt)
       }
+      setLoading(false)
     }
-
-    try {
-      localStorage.removeItem('aft-profile-weekly:' + currentUserId)
-      localStorage.removeItem('aft-profile-cosmetics:' + currentUserId)
-      localStorage.removeItem('aft-weekly-goals-enabled:' + currentUserId)
-    } catch { }
-    loadProfile().finally(() => active && setLoading(false))
+    loadProfile()
     return () => { active = false }
   }, [currentUserId])
+
+  const selectedAvatar = PROFILE_AVATARS.find(a => a[0] === profile.avatar_preset) || PROFILE_AVATARS[0]
+  const selectedAvatarUri = useMemo(() => avatarDataUri(selectedAvatar[2]), [selectedAvatar])
 
   const chooseAvatar = (id) => {
     setAvatarError(false)
     setProfile(current => ({ ...current, avatar_preset: id }))
-    setAvatarPickerOpen(false)
+    setAvatarOpen(false)
   }
 
   const generateAnother = () => {
@@ -1293,42 +1266,10 @@ function SettingsPage({ currentUserId }) {
     }))
   }
 
-  const memberDate = createdAt ? new Date(createdAt) : null
-  const daysOnSite = memberDate && !Number.isNaN(memberDate.getTime())
-    ? Math.max(0, Math.floor((Date.now() - memberDate.getTime()) / 86400000))
-    : null
-
-  const completionItems = [
-    [Boolean(profile.display_name.trim()), 'Add a display name'],
-    [Boolean(profile.bio.trim()), 'Write a short bio'],
-    [Boolean(profile.interests.trim()), 'Add some interests'],
-    [Boolean(profile.avatar_preset), 'Choose an avatar'],
-    [profile.banner_preset !== 'default', 'Pick a profile banner'],
-    [profile.accent_color !== '#39ff14', 'Choose an accent colour']
-  ]
-  const completionCount = completionItems.filter(item => item[0]).length
-  const completionPercent = Math.round((completionCount / completionItems.length) * 100)
-  const suggestions = completionItems.filter(item => !item[0]).slice(0, 3).map(item => item[1])
-
-  const milestones = [
-    [7, 'First week', '7-day member'],
-    [30, 'One month', '30-day member'],
-    [100, 'Century', '100-day member']
-  ]
-  const earnedMilestones = milestones.filter(item => daysOnSite !== null && daysOnSite >= item[0])
-
   const save = async (event) => {
     event.preventDefault()
     setSaving(true)
     setMessage('')
-
-    const cleanSections = {
-      interests: profile.profile_sections.interests === true,
-      achievements: profile.profile_sections.achievements === true,
-      memberSince: profile.profile_sections.memberSince === true,
-      completion: profile.profile_sections.completion === true
-    }
-
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -1339,10 +1280,9 @@ function SettingsPage({ currentUserId }) {
         avatar_url: null,
         accent_color: profile.accent_color,
         banner_preset: profile.banner_preset,
-        profile_sections: cleanSections
+        profile_sections: profile.profile_sections
       })
       .eq('id', currentUserId)
-
     setMessage(error ? 'Could not save profile details.' : 'Profile saved.')
     setSaving(false)
   }
@@ -1351,48 +1291,86 @@ function SettingsPage({ currentUserId }) {
     return <Card eyebrow="SETTINGS" title="Profile & settings"><Loading label="Loading profile..." /></Card>
   }
 
-  const visibleAchievements = profile.profile_sections.achievements
+  const interests = profile.interests.split(',').map(x => x.trim()).filter(Boolean)
 
   return (
     <Card eyebrow="SETTINGS" title="Profile & settings">
-      <form className="settings-form profile-settings-form" onSubmit={save}>
-        <style>{`
-          .engagement-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:16px 0}
-          .engagement-panel{border:1px solid #30243d;border-radius:16px;background:linear-gradient(145deg,#100b18,#0a0710);padding:16px}
-          .engagement-panel h3{margin:0 0 7px;color:#f4eaff;font-size:1rem}
-          .engagement-muted{color:#aaa1b7;font-size:.88rem;margin:0}
-          .member-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-          .member-days{font-size:1.55rem;font-weight:700;color:var(--profile-accent,#39ff14)}
-          .badge-row,.suggestion-row{display:flex;gap:8px;flex-wrap:wrap}
-          .engagement-badge{padding:7px 10px;border:1px solid var(--profile-accent,#39ff14);border-radius:999px;background:#0d0b11;color:#f5eff8;font-size:.8rem}
-          .engagement-badge.locked{opacity:.45;border-color:#4a4052}
-          .completion-track{height:8px;background:#211a28;border-radius:999px;overflow:hidden;margin:10px 0}
-          .completion-fill{height:100%;background:var(--profile-accent,#39ff14);border-radius:inherit;transition:width .2s ease}
-          .suggestion-row span{padding:5px 8px;border:1px solid #40344a;border-radius:999px;color:#c8c0ce;font-size:.78rem}
-          .profile-toggle-list{display:grid;gap:12px}
-          .profile-toggle-list .profile-toggle{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;margin:0!important}
-          .profile-toggle-list .profile-toggle input[type="checkbox"]{width:18px!important;height:18px!important;min-width:18px!important;flex:0 0 18px!important;margin:0!important;accent-color:var(--profile-accent,#39ff14)}
-          .profile-toggle-list .profile-toggle span{display:block!important;margin:0!important}
-          .profile-editor-compact{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-          .profile-current-avatar{width:74px;height:74px;border-radius:18px;border:2px solid var(--profile-accent,#39ff14);background:#050505;display:grid;place-items:center;overflow:hidden;box-shadow:0 0 14px color-mix(in srgb,var(--profile-accent,#39ff14) 24%,transparent)}
-          .profile-current-avatar img{width:100%;height:100%;object-fit:cover}
-          .profile-avatar-popover{margin-top:12px;padding:12px;border:1px solid #33283d;border-radius:14px;background:#09070c;max-height:300px;overflow:auto}
-          .profile-avatar-grid-compact{display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:8px}
-          .profile-avatar-grid-compact button{position:relative;min-height:58px;border:1px solid #33283d;border-radius:12px;background:#0e0b12;padding:5px;cursor:pointer}
-          .profile-avatar-grid-compact button.selected{border-color:var(--profile-accent,#39ff14);box-shadow:0 0 10px color-mix(in srgb,var(--profile-accent,#39ff14) 25%,transparent)}
-          .profile-avatar-grid-compact img{width:48px;height:48px;display:block;margin:auto}
-          .profile-avatar-grid-compact button:focus-visible{outline:2px solid var(--profile-accent,#39ff14);outline-offset:2px}
-          @media(max-width:760px){.engagement-grid{grid-template-columns:1fr}.profile-avatar-grid-compact{grid-template-columns:repeat(4,minmax(52px,1fr))}}
-        `}</style>
+      <style>{`
+        .aft-profile-wrap { display:grid; gap:20px; }
+        .aft-profile-preview { position:relative; overflow:hidden; border:1px solid var(--profile-accent); border-radius:18px; box-shadow:0 0 18px var(--profile-accent-soft); background:#111; }
+        .aft-profile-banner { height:120px; border-bottom:1px solid var(--profile-accent); background:#181818; }
+        .aft-profile-banner.banner-grid { background-color:#161616; background-image:linear-gradient(var(--profile-accent-faint) 1px,transparent 1px),linear-gradient(90deg,var(--profile-accent-faint) 1px,transparent 1px); background-size:22px 22px; }
+        .aft-profile-banner.banner-scanlines { background:repeating-linear-gradient(0deg,#111 0,#111 5px,#1d1d1d 6px,#1d1d1d 7px); }
+        .aft-profile-banner.banner-sunset { background:radial-gradient(circle at 80% 20%,#5b284f 0,#241d31 38%,#101010 78%); }
+        .aft-profile-banner.banner-mono { background:linear-gradient(135deg,#2a2a2a,#0c0c0c); }
+        .aft-profile-body { position:relative; padding:0 22px 22px; }
+        .aft-profile-avatar { width:104px; height:104px; margin-top:-52px; border:3px solid var(--profile-accent); border-radius:22px; overflow:hidden; background:#090909; box-shadow:0 0 16px var(--profile-accent-soft); }
+        .aft-profile-avatar img { width:100%; height:100%; display:block; image-rendering:auto; }
+        .aft-profile-avatar-fallback { display:grid; place-items:center; width:100%; height:100%; color:var(--profile-accent); font-size:32px; }
+        .aft-profile-name { display:block; margin-top:12px; color:var(--profile-accent); font-size:1.35rem; }
+        .aft-profile-handle { color:#aaa; font-size:.9rem; }
+        .aft-profile-bio { max-width:720px; margin:10px 0 0; color:#ddd; }
+        .aft-profile-sections { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:18px; }
+        .aft-profile-section { padding:12px; border-top:1px solid var(--profile-accent-soft); background:#0d0d0d; }
+        .aft-profile-section h4 { margin:0 0 8px; color:var(--profile-accent); }
+        .aft-profile-tags { display:flex; flex-wrap:wrap; gap:6px; }
+        .aft-profile-tag { border:1px solid var(--profile-accent-soft); border-radius:999px; padding:4px 8px; font-size:.78rem; }
+        .aft-profile-editor { display:grid; gap:16px; }
+        .aft-profile-editor-section { border:1px solid #333; border-radius:14px; padding:16px; }
+        .aft-profile-editor-section legend { padding:0 7px; color:var(--profile-accent); font-weight:700; }
+        .aft-avatar-current { display:flex; align-items:center; gap:14px; }
+        .aft-avatar-current img,.aft-avatar-current .aft-avatar-fallback { width:64px; height:64px; border:2px solid var(--profile-accent); border-radius:14px; background:#090909; }
+        .aft-avatar-current img { display:block; }
+        .aft-avatar-fallback { display:grid; place-items:center; color:var(--profile-accent); font-size:22px; }
+        .aft-avatar-actions { display:flex; flex-wrap:wrap; gap:8px; }
+        .aft-avatar-picker { margin-top:12px; max-height:330px; overflow:auto; padding:10px; border:1px solid #333; border-radius:12px; background:#0b0b0b; }
+        .aft-avatar-grid { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; }
+        .aft-avatar-choice { position:relative; aspect-ratio:1; border:1px solid #333; border-radius:10px; background:#151515; padding:4px; cursor:pointer; }
+        .aft-avatar-choice:hover,.aft-avatar-choice:focus-visible { border-color:var(--profile-accent); outline:2px solid var(--profile-accent-soft); outline-offset:1px; }
+        .aft-avatar-choice.selected { border:2px solid var(--profile-accent); box-shadow:0 0 10px var(--profile-accent-soft); }
+        .aft-avatar-choice img { width:100%; height:100%; display:block; border-radius:7px; }
+        .aft-avatar-check { position:absolute; right:3px; top:3px; min-width:18px; height:18px; padding:0 4px; display:grid; place-items:center; border-radius:9px; background:var(--profile-accent); color:#000; font-size:11px; font-weight:900; }
+        .aft-color-grid { display:flex; flex-wrap:wrap; gap:9px; }
+        .aft-color-choice { display:flex; align-items:center; gap:7px; border:1px solid #333; border-radius:999px; padding:7px 10px; background:#111; color:#eee; cursor:pointer; }
+        .aft-color-choice span { width:18px; height:18px; border-radius:50%; background:var(--choice-color); border:1px solid #777; }
+        .aft-color-choice.selected { border-color:var(--choice-color); box-shadow:0 0 10px color-mix(in srgb,var(--choice-color) 35%,transparent); }
+        .aft-banner-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; }
+        .aft-banner-choice { min-height:68px; border:1px solid #333; border-radius:10px; color:#eee; cursor:pointer; }
+        .aft-banner-choice.selected { border:2px solid var(--profile-accent); box-shadow:0 0 12px var(--profile-accent-soft); }
+        .aft-toggle-list { display:flex; flex-wrap:wrap; gap:14px; }
+        .aft-toggle { display:flex; align-items:center; gap:7px; }
+        .aft-toggle input { accent-color:var(--profile-accent); }
+        @media (max-width:760px) {
+          .aft-profile-sections { grid-template-columns:1fr; }
+          .aft-avatar-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+          .aft-banner-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        }
+      `}</style>
 
-        <div className="profile-editor-layout">
-          <section className={`profile-preview-card banner-${profile.banner_preset}`} style={{ '--profile-accent': profile.accent_color }}>
-            <div className="profile-preview-avatar">
-              {selectedAvatarUri && !avatarError ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} profile avatar`} onError={() => setAvatarError(true)} /> : <span className="profile-avatar-fallback" aria-hidden="true">?</span>}
+      <form className="settings-form profile-settings-form" onSubmit={save}>
+        <div className="aft-profile-wrap" style={{
+          '--profile-accent': profile.accent_color,
+          '--profile-accent-soft': `${profile.accent_color}55`,
+          '--profile-accent-faint': `${profile.accent_color}22`
+        }}>
+          <section className="aft-profile-preview" aria-label="Live profile preview">
+            <div className={`aft-profile-banner banner-${profile.banner_preset}`} aria-label="Profile banner" />
+            <div className="aft-profile-body">
+              <div className="aft-profile-avatar">
+                {selectedAvatarUri && !avatarError
+                  ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} profile avatar`} onError={() => setAvatarError(true)} />
+                  : <span className="aft-profile-avatar-fallback">?</span>}
+              </div>
+              <strong className="aft-profile-name">{profile.display_name || profile.username || 'Your profile'}</strong>
+              <span className="aft-profile-handle">@{profile.username}</span>
+              {profile.bio && <p className="aft-profile-bio">{profile.bio}</p>}
+
+              <div className="aft-profile-sections">
+                {profile.profile_sections.interests && <div className="aft-profile-section"><h4>Interests</h4><div className="aft-profile-tags">{interests.length ? interests.map(x => <span className="aft-profile-tag" key={x}>{x}</span>) : <span>None added yet.</span>}</div></div>}
+                {profile.profile_sections.favoriteWords && <div className="aft-profile-section"><h4>Favorite words</h4><span>Not added yet.</span></div>}
+                {profile.profile_sections.achievements && <div className="aft-profile-section"><h4>Achievements</h4><span>Not added yet.</span></div>}
+              </div>
             </div>
-            <strong>{profile.display_name || profile.username || 'Your profile'}</strong>
-            <span>@{profile.username}</span>
-            {profile.bio && <p>{profile.bio}</p>}
           </section>
 
           <div className="profile-editor-fields">
@@ -1401,68 +1379,60 @@ function SettingsPage({ currentUserId }) {
             <label>Bio<textarea value={profile.bio} maxLength={240} onChange={e => setProfile({ ...profile, bio: e.target.value })} placeholder="A short description about you." /><small>{profile.bio.length}/240</small></label>
             <label>Interests<input value={profile.interests} maxLength={240} onChange={e => setProfile({ ...profile, interests: e.target.value })} placeholder="music, games, cricket" /></label>
           </div>
-        </div>
 
-        <div className="engagement-grid">
-          {profile.profile_sections.memberSince && <section className="engagement-panel" style={{ '--profile-accent': profile.accent_color }}>
-            <h3>Member since</h3>
-            {memberDate && !Number.isNaN(memberDate.getTime()) ? <>
-              <div className="member-line"><strong>{memberDate.toLocaleDateString()}</strong><span>·</span><span className="member-days">{daysOnSite}</span><span>days on the site</span></div>
-              <div className="badge-row" aria-label="Membership milestones">{milestones.map(([days, label]) => <span key={days} className={`engagement-badge ${daysOnSite >= days ? '' : 'locked'}`}>{daysOnSite >= days ? '✓ ' : ''}{label}</span>)}</div>
-            </> : <p className="engagement-muted">Join date is unavailable.</p>}
-          </section>}
-
-          {profile.profile_sections.completion && <section className="engagement-panel" style={{ '--profile-accent': profile.accent_color }}>
-            <h3>Profile completion · {completionPercent}%</h3>
-            <div className="completion-track" aria-label={`Profile ${completionPercent}% complete`}><div className="completion-fill" style={{ width: `${completionPercent}%` }} /></div>
-            {suggestions.length ? <div className="suggestion-row" aria-label="Optional profile suggestions">{suggestions.map(item => <span key={item}>{item}</span>)}</div> : <p className="engagement-muted">Your profile is complete. Nothing else is required.</p>}
-          </section>}
-
-          {visibleAchievements && <section className="engagement-panel" style={{ '--profile-accent': profile.accent_color }}>
-            <h3>Achievements</h3>
-            <div className="badge-row">
-              {milestones.map(([days, label]) => <span key={days} className={`engagement-badge ${daysOnSite !== null && daysOnSite >= days ? '' : 'locked'}`}>{daysOnSite !== null && daysOnSite >= days ? '✓ ' : ''}{label}</span>)}
-              <span className={`engagement-badge ${completionPercent >= 100 ? '' : 'locked'}`}>{completionPercent >= 100 ? '✓ ' : ''}Profile complete</span>
+          <fieldset className="aft-profile-editor-section">
+            <legend>Avatar</legend>
+            <div className="aft-avatar-current">
+              {selectedAvatarUri && !avatarError ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} current avatar`} /> : <span className="aft-avatar-fallback">?</span>}
+              <div>
+                <strong>{selectedAvatar[1]}</strong>
+                <div className="aft-avatar-actions">
+                  <button type="button" className="button secondary" onClick={() => setAvatarOpen(v => !v)} aria-expanded={avatarOpen}>{avatarOpen ? 'Close avatars' : 'Change avatar'}</button>
+                  <button type="button" className="button secondary" onClick={generateAnother}>Generate another</button>
+                </div>
+              </div>
             </div>
-          </section>}
+            {avatarOpen && <div className="aft-avatar-picker" role="group" aria-label="Choose profile avatar">
+              <div className="aft-avatar-grid">
+                {PROFILE_AVATARS.map(([id, label, seed]) => {
+                  const uri = avatarDataUri(seed)
+                  const selected = profile.avatar_preset === id
+                  return <button type="button" key={id} className={`aft-avatar-choice ${selected ? 'selected' : ''}`} aria-label={`${label}${selected ? ', selected' : ''}`} aria-pressed={selected} onClick={() => chooseAvatar(id)}>
+                    {uri ? <img src={uri} alt="" aria-hidden="true" /> : <span>?</span>}
+                    {selected && <span className="aft-avatar-check" aria-hidden="true">✓</span>}
+                  </button>
+                })}
+              </div>
+            </div>}
+          </fieldset>
 
+          <fieldset className="aft-profile-editor-section">
+            <legend>Accent colour</legend>
+            <div className="aft-color-grid" role="group" aria-label="Profile accent colours">
+              {PROFILE_COLORS.map(([value, label]) => {
+                const selected = profile.accent_color === value
+                return <button type="button" key={value} className={`aft-color-choice ${selected ? 'selected' : ''}`} style={{ '--choice-color': value }} aria-label={`${label}${selected ? ', selected' : ''}`} aria-pressed={selected} onClick={() => setProfile({ ...profile, accent_color: value })}><span aria-hidden="true" /><b>{label}</b></button>
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset className="aft-profile-editor-section">
+            <legend>Profile banner</legend>
+            <div className="aft-banner-grid" role="group" aria-label="Profile banners">
+              {PROFILE_BANNERS.map(([id, label]) => <button type="button" key={id} className={`aft-banner-choice aft-profile-banner banner-${id} ${profile.banner_preset === id ? 'selected' : ''}`} aria-label={`${label}${profile.banner_preset === id ? ', selected' : ''}`} aria-pressed={profile.banner_preset === id} onClick={() => setProfile({ ...profile, banner_preset: id })}><span>{label}</span></button>)}
+            </div>
+          </fieldset>
+
+          <fieldset className="aft-profile-editor-section">
+            <legend>Visible sections</legend>
+            <div className="aft-toggle-list">
+              {[['interests','Interests'],['favoriteWords','Favorite words'],['achievements','Achievements']].map(([key,label]) => <label className="aft-toggle" key={key}><input type="checkbox" checked={profile.profile_sections[key]} onChange={() => toggleSection(key)} /><span>{label}</span></label>)}
+            </div>
+          </fieldset>
+
+          {message && <p className="status" role="status">{message}</p>}
+          <div className="actions profile-save-actions"><button className="button primary" disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</button></div>
         </div>
-
-        <fieldset className="profile-editor-section">
-          <legend>Choose your avatar</legend>
-          <div className="profile-editor-compact">
-            <div className="profile-current-avatar">{selectedAvatarUri && !avatarError ? <img src={selectedAvatarUri} alt={`${selectedAvatar[1]} current avatar`} onError={() => setAvatarError(true)} /> : <span aria-hidden="true">?</span>}</div>
-            <div><strong>{selectedAvatar[1]}</strong><p className="widget-help">Choose another avatar without filling the page with all choices.</p></div>
-            <button type="button" className="button secondary" aria-expanded={avatarPickerOpen} onClick={() => setAvatarPickerOpen(v => !v)}>{avatarPickerOpen ? 'Close avatars' : 'Change avatar'}</button>
-            <button type="button" className="button secondary" onClick={generateAnother}>Generate another</button>
-          </div>
-          {avatarPickerOpen && <div className="profile-avatar-popover" role="dialog" aria-label="Choose a profile avatar"><div className="profile-avatar-grid-compact">{PROFILE_AVATARS.map(([id, label, seed]) => { const uri = avatarDataUri(seed); const selected = profile.avatar_preset === id; return <button type="button" key={id} className={selected ? 'selected' : ''} aria-label={`${label}${selected ? ', selected' : ''}`} aria-pressed={selected} onClick={() => chooseAvatar(id)}>{uri ? <img src={uri} alt="" aria-hidden="true" /> : <span>?</span>}{selected && <span aria-hidden="true">✓</span>}</button> })}</div></div>}
-        </fieldset>
-
-        <fieldset className="profile-editor-section">
-          <legend>Accent colour</legend>
-          <div className="profile-color-grid" role="group" aria-label="Profile accent colours">{PROFILE_COLORS.map(([value, label]) => <button type="button" key={value} className={`profile-color-choice ${profile.accent_color === value ? 'selected' : ''}`} style={{ '--choice-color': value }} aria-label={`${label}${profile.accent_color === value ? ', selected' : ''}`} aria-pressed={profile.accent_color === value} onClick={() => setProfile({ ...profile, accent_color: value })}><span aria-hidden="true" /><b>{label}</b></button>)}</div>
-        </fieldset>
-
-        <fieldset className="profile-editor-section">
-          <legend>Profile banner</legend>
-          <div className="profile-banner-grid" role="group" aria-label="Profile banners">{PROFILE_BANNERS.map(([id, label]) => <button type="button" key={id} className={`profile-banner-choice banner-${id} ${profile.banner_preset === id ? 'selected' : ''}`} aria-label={`${label}${profile.banner_preset === id ? ', selected' : ''}`} aria-pressed={profile.banner_preset === id} onClick={() => setProfile({ ...profile, banner_preset: id })}><span>{label}</span></button>)}</div>
-        </fieldset>
-
-        <fieldset className="profile-editor-section">
-          <legend>Visible sections</legend>
-          <div className="profile-toggle-list">
-            {[
-              ['interests', 'Interests'],
-              ['achievements', 'Achievements'],
-              ['memberSince', 'Member since'],
-              ['completion', 'Profile completion']
-            ].map(([key, label]) => <label className="profile-toggle" key={key}><input type="checkbox" checked={profile.profile_sections[key] === true} onChange={() => toggleSection(key)} /><span>{label}</span></label>)}
-          </div>
-        </fieldset>
-
-        {message && <p className="status" role="status">{message}</p>}
-        <div className="actions profile-save-actions"><button className="button primary" disabled={saving}>{saving ? 'Saving...' : 'Save profile'}</button></div>
       </form>
     </Card>
   )
@@ -1473,6 +1443,7 @@ function App() {
   const route = useHashRoute()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   useEffect(() => { setMobileNavOpen(false) }, [route])
+
   useEffect(() => {
     if (!supabase) { setChecking(false); return }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setChecking(false) })
@@ -1480,7 +1451,7 @@ function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  if (checking) return <main className="auth-shell"><Loading label="Checking session…" /></main>
+  if (checking) return <main className="auth-shell"><Loading label="Checking sessionâ€¦" /></main>
   if (!isSupabaseConfigured && route !== 'home') return <Auth onLogin={() => window.location.reload()} />
 
   const username = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || 'Guest'
@@ -1535,7 +1506,7 @@ function App() {
           {nav.map(([id, label], index) => <a key={id} className={route === id ? 'active' : ''} href={`#/${id}`}>
             <span className="ps2-nav-index">{String(index + 1).padStart(2, '0')}</span>
             <span>{label}</span>
-            {route === id && <b>▶</b>}
+            {route === id && <b>â–¶</b>}
           </a>)}
         </nav>
       </aside>
@@ -1547,7 +1518,7 @@ function App() {
 
     <RadioMiniPlayer />
     <footer className="ps2-footer">
-      <span>© A FUN TIME</span>
+      <span>Â© A FUN TIME</span>
       <div className="footer-links"><a href="#/about">ABOUT</a><a href="#/help">HELP</a><a href="#/terms">TERMS</a><a href="#/accessibility">ACCESSIBILITY</a><a href="https://github.com/2bitthug" target="_blank" rel="noreferrer">CONTACT</a></div>
       <span>v1.0</span>
     </footer>

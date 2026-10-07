@@ -1269,7 +1269,7 @@ function SettingsPage({ currentUserId }) {
       localStorage.removeItem('aft-profile-weekly:' + currentUserId)
       localStorage.removeItem('aft-profile-cosmetics:' + currentUserId)
       localStorage.removeItem('aft-weekly-goals-enabled:' + currentUserId)
-    } catch { }
+    } catch {}
     loadProfile().finally(() => active && setLoading(false))
     return () => { active = false }
   }, [currentUserId])
@@ -1423,6 +1423,7 @@ function SettingsPage({ currentUserId }) {
             <div className="badge-row">
               {milestones.map(([days, label]) => <span key={days} className={`engagement-badge ${daysOnSite !== null && daysOnSite >= days ? '' : 'locked'}`}>{daysOnSite !== null && daysOnSite >= days ? '✓ ' : ''}{label}</span>)}
               <span className={`engagement-badge ${completionPercent >= 100 ? '' : 'locked'}`}>{completionPercent >= 100 ? '✓ ' : ''}Profile complete</span>
+              {cosmetics.map(item => <span className="engagement-badge" key={item}>Cosmetic: {item.replace(/-/g, ' ')}</span>)}
             </div>
           </section>}
 
