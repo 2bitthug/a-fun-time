@@ -1,6 +1,6 @@
 # A Fun Time — React + Vite
 
-A dark, mobile-friendly interactive playground combining public data sources, a self-contained play-money poker game, and a Supabase-powered community area for user search, connections, and private chat.
+A dark, mobile-friendly interactive playground combining public data sources, and a Supabase-powered community area for user search, connections, and private chat.
 
 ## Requirements
 
