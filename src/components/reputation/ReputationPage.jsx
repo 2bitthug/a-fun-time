@@ -8,6 +8,7 @@ export function ReputationPage({ currentUserId }) {
   const [events, setEvents] = useState([])
   const [badges, setBadges] = useState([])
   const [stats, setStats] = useState({ posts: 0, comments: 0, votes: 0 })
+  const [daysJoined, setDaysJoined] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -26,6 +27,8 @@ export function ReputationPage({ currentUserId }) {
       if (!active) return
       if (profileRes.error) setError(profileRes.error.message)
       setProfile(profileRes.data)
+      const joinedAt = profileRes.data?.created_at ? new Date(profileRes.data.created_at) : null
+      setDaysJoined(joinedAt && !Number.isNaN(joinedAt.getTime()) ? Math.max(0, Math.floor((Date.now() - joinedAt.getTime()) / 86400000)) : null)
       setEvents(eventsRes.data || [])
       setBadges((badgesRes.data || []).map(x => ({ ...x.badges, awarded_at: x.awarded_at })).filter(Boolean))
       setStats({ posts: postsRes.count || 0, comments: commentsRes.count || 0, votes: votesRes.count || 0 })
@@ -48,7 +51,7 @@ export function ReputationPage({ currentUserId }) {
       <div className="reputation-score"><strong>{profile?.reputation_score || 0}</strong><span>reputation</span></div>
     </section>
     <div className="reputation-grid">
-      <section className="card"><div className="card-heading"><div><p className="eyebrow">ACTIVITY</p><h2>Contribution</h2></div></div><div className="reputation-stat-grid"><div><strong>{stats.posts}</strong><span>Posts</span></div><div><strong>{stats.comments}</strong><span>Comments</span></div><div><strong>{stats.votes}</strong><span>Votes cast</span></div><div><strong>+{positive}</strong><span>Positive points</span></div><div><strong>-{negative}</strong><span>Negative points</span></div></div></section>
+      <section className="card"><div className="card-heading"><div><p className="eyebrow">ACTIVITY</p><h2>Contribution</h2></div></div><div className="reputation-stat-grid"><div><strong>{daysJoined === null ? '—' : daysJoined}</strong><span>Days joined</span></div><div><strong>{stats.posts}</strong><span>Posts</span></div><div><strong>{stats.comments}</strong><span>Comments</span></div><div><strong>{stats.votes}</strong><span>Votes cast</span></div><div><strong>+{positive}</strong><span>Positive points</span></div><div><strong>-{negative}</strong><span>Negative points</span></div></div></section>
       <section className="card"><div className="card-heading"><div><p className="eyebrow">RECOGNITION</p><h2>Badges</h2></div></div>{badges.length ? <div className="badge-grid">{badges.map(b => <div className="badge-card" key={b.id}><span className="badge-icon">{badgeIcons[b.icon] || '★'}</span><div><strong>{b.name}</strong><p>{b.description}</p></div></div>)}</div> : <div className="empty-state"><strong>No badges yet.</strong><span>Keep contributing. Recognition is based on useful participation.</span></div>}</section>
     </div>
     <section className="card"><div className="card-heading"><div><p className="eyebrow">TRANSPARENT LEDGER</p><h2>Recent reputation</h2></div></div>{events.length ? <div className="reputation-events">{events.map(e => <div className="reputation-event" key={e.id}><div><strong>{label(e.event_type)}</strong><span>{new Date(e.created_at).toLocaleString()}</span></div><b className={e.points >= 0 ? 'points positive' : 'points negative'}>{e.points >= 0 ? '+' : ''}{e.points}</b></div>)}</div> : <div className="empty-state"><strong>No reputation events yet.</strong><span>Your contribution history will appear here.</span></div>}</section>

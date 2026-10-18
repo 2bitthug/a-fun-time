@@ -32,21 +32,11 @@ function Empty({ children }) {
 export function TownHomePage() {
   return (
     <PageFrame eyebrow="TOWN" title="A place to find people and conversations.">
-      <div className="town-hero">
-        <div>
-          <p className="town-kicker">FIND, DON'T FOLLOW</p>
-          <h2>The platform helps you find things. It doesn't decide what you should care about.</h2>
+      <div className="town-hero town-hero-clean">
+        <div className="town-hero-copy">
+          <p className="town-kicker">A TOWN BUILT BY ITS MEMBERS</p>
+          <h2>The platform helps you find things. It doesn’t decide what you should care about.</h2>
           <p>Browse communities, search deliberately, and choose how discussions are sorted. No hidden recommendation score.</p>
-          <div className="town-hero-actions">
-            <a className="button primary" href="#/communities">Browse communities</a>
-            <a className="button secondary" href="#/settings">Your profile</a>
-          </div>
-        </div>
-        <div className="town-principles">
-          <span>Chronological first</span>
-          <span>Transparent sorting</span>
-          <span>Community-led</span>
-          <span>Contribution over attention</span>
         </div>
       </div>
     </PageFrame>
@@ -60,6 +50,7 @@ export function CommunitiesPage() {
   const [sort, setSort] = useState('latest')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showAll, setShowAll] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -89,6 +80,10 @@ export function CommunitiesPage() {
     if (sort === 'latest') return result
     return [...result].sort((a, b) => a.name.localeCompare(b.name))
   }, [communities, query, category, sort])
+  const curated = useMemo(() => {
+    if (showAll || query.trim() || category !== 'All') return filtered
+    return filtered.slice(0, 7)
+  }, [filtered, showAll, query, category])
 
   return (
     <PageFrame
@@ -96,6 +91,7 @@ export function CommunitiesPage() {
       title="Choose where to spend your attention."
       actions={<a className="button primary" href="#/create-community">Create community</a>}
     >
+      <div className="town-directory-intro"><p>Start with a small set of communities. Explore the full directory whenever you want.</p><button type="button" className="button secondary" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show curated selection' : `Show all ${communities.length} communities`}</button></div>
       <div className="town-directory-controls">
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search communities…" aria-label="Search communities" />
         <select value={category} onChange={e => setCategory(e.target.value)} aria-label="Filter by category">
@@ -111,7 +107,7 @@ export function CommunitiesPage() {
       {error && <div className="town-error">{error}<button className="button secondary" onClick={load}>Retry</button></div>}
       {!loading && !error && !filtered.length && <Empty>{query || category !== 'All' ? 'No communities match your filters.' : 'No communities have been seeded yet.'}</Empty>}
       <div className="community-grid">
-        {filtered.map(community => (
+        {curated.map(community => (
           <a className="community-card" href={`#/community/${community.slug}`} key={community.id}>
             <div className="community-card-icon">{community.icon_url ? <img src={community.icon_url} alt="" /> : community.name.slice(0, 1).toUpperCase()}</div>
             <div className="community-card-body">
@@ -162,7 +158,7 @@ export function CommunityPage({ slug, currentUserId }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [slug, currentUserId])
+  useEffect(() => { load(); window.dispatchEvent(new CustomEvent('town-pet-event', { detail: { kind: 'community-opened', label: slug } })) }, [slug, currentUserId])
 
   const toggleMembership = async () => {
     if (!currentUserId || !community) return

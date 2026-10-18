@@ -13,6 +13,7 @@ import { BetaFeedbackPage, LegalPage } from './components/beta/BetaPages'
 import { BetaLaunchPage } from './components/beta/BetaLaunchPage'
 import { PublicLaunchPage } from './components/launch/PublicLaunchPage'
 import { GrowthPage } from './components/growth/GrowthPage'
+import { ShareProfileCard } from './components/profile/ShareProfileCard'
 
 const LEGACY_SOURCES = {
   pokemon: (name) => `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name.toLowerCase())}`,
@@ -666,10 +667,10 @@ function SocialSection({ currentUserId }) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const path = `${currentUserId}/${Date.now()}-${safeName}`
     const { error: uploadError } = await supabase.storage.from('chat-media').upload(path, file, { upsert: false })
-    if (uploadError) { setError('The file could not be uploaded. Run the updated Supabase schema first.'); return }
+    if (uploadError) { setError(`File upload failed: ${uploadError.message}${uploadError.statusCode ? ` (HTTP ${uploadError.statusCode})` : ''}. Check the chat-media bucket and Storage policies in Supabase.`); return }
     const { data: publicData } = supabase.storage.from('chat-media').getPublicUrl(path)
     const { data: inserted, error: e } = await supabase.from('messages').insert({ sender_id: currentUserId, receiver_id: selected.id, body: `Attachment: ${file.name}`, attachment_url: publicData.publicUrl, attachment_name: file.name, attachment_type: file.type, delivery_status: 'sent' }).select('id,sender_id,receiver_id,body,created_at,delivery_status,attachment_url,attachment_name,attachment_type').single()
-    if (e) setError('The file was uploaded but the message could not be created.')
+    if (e) setError(`The file uploaded, but sending the attachment message failed: ${e.message}${e.code ? ` (code ${e.code})` : ''}`)
     else if (inserted) setMessages(prev => [...prev, inserted])
   }
 
@@ -679,7 +680,7 @@ function SocialSection({ currentUserId }) {
     const channel = supabase.channel(`chat-${currentUserId}-${selected.id}`, { config: { presence: { key: currentUserId } } })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, async payload => {
         if (payload.new.sender_id === selected.id) {
-          setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, { ...payload.new, delivery_status: 'delivered' }])
+          setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, { ...payload.new, delivery_status: 'delivered' }]); window.dispatchEvent(new CustomEvent('town-pet-event', { detail: { kind: 'message-received' } }))
           await supabase.from('messages').update({ delivery_status: 'read', delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }).eq('id', payload.new.id).eq('receiver_id', currentUserId)
         }
       })
@@ -710,7 +711,7 @@ function SocialSection({ currentUserId }) {
     return current - previous > 5 * 60 * 1000
   }
 
-  return <Card id="community" eyebrow="10 · Community" title="Find users & chat">
+  return <Card id="community" eyebrow="10 · Community" title="Chat">
     <p className="widget-help">Search usernames, connect with people, and use private chat. Double-click a message for quick actions.</p>
     <form className="input-row" onSubmit={searchUsers}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a username" aria-label="Search community usernames" /><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button></form>
     {error && <p className="status notice" role="status" aria-live="polite">{error}</p>}
@@ -1100,7 +1101,7 @@ function RadioMiniPlayer() {
     <button className="radio-mini-close" type="button" aria-label="Close radio player" onClick={() => { audioRef.current?.pause(); setStation(null); setPlaying(false) }}>Ã—</button>
   </div>
 }
-function HomePage() { return <TownHomePage /> }
+function HomePage({ currentUserId }) { return <TownHomePage currentUserId={currentUserId} /> }
 
 function useHashRoute() {
   const read = () => window.location.hash.replace(/^#\/?/, '').split('?')[0] || 'home'
@@ -1132,12 +1133,26 @@ const PROFILE_COLORS = [
   ['#f2f2f2', 'White']
 ]
 
-const PROFILE_BANNERS = [
-  ['default', 'Default'],
-  ['grid', 'Grid'],
-  ['scanlines', 'Scanlines'],
-  ['sunset', 'Dark sunset'],
-  ['mono', 'Monochrome']
+const PROFILE_PETS = [
+  ['none', 'No pet', ''],
+  ['lion', 'Lion', 'lion.svg'],
+  ['cat', 'Cat', 'cat.svg'],
+  ['dog', 'Dog', 'dog.svg'],
+  ['fox', 'Fox', 'fox.svg'],
+  ['rabbit', 'Rabbit', 'rabbit.svg'],
+  ['bear', 'Bear', 'bear.svg'],
+  ['wolf', 'Wolf', 'wolf.svg'],
+  ['owl', 'Owl', 'owl.svg'],
+  ['penguin', 'Penguin', 'penguin.svg'],
+  ['frog', 'Frog', 'frog.svg'],
+  ['turtle', 'Turtle', 'turtle.svg'],
+  ['deer', 'Deer', 'deer.svg'],
+  ['panda', 'Panda', 'panda.svg'],
+  ['tiger', 'Tiger', 'tiger.svg'],
+  ['raccoon', 'Raccoon', 'raccoon.svg'],
+  ['hedgehog', 'Hedgehog', 'hedgehog.svg'],
+  ['duck', 'Duck', 'duck.svg'],
+  ['squirrel', 'Squirrel', 'squirrel.svg']
 ]
 
 
@@ -1156,7 +1171,8 @@ function SettingsPage({ currentUserId }) {
     interests: '',
     avatar_id: DEFAULT_AVATAR_ID,
     accent_color: '#39ff14',
-    banner_preset: 'default',
+    pet_id: 'none',
+    pet_name: 'Pixel',
     profile_sections: defaultSections
   })
   const [createdAt, setCreatedAt] = useState(null)
@@ -1175,11 +1191,15 @@ function SettingsPage({ currentUserId }) {
       if (!currentUserId) return
       setLoading(true)
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
-        .select('username,bio,interests,display_name,avatar_id,accent_color,banner_preset,profile_sections,created_at')
+        .select('username,bio,interests,display_name,avatar_id,accent_color,pet_id,pet_name,profile_sections,created_at')
         .eq('id', currentUserId)
         .single()
+      if (error && /pet_id|column .* does not exist|schema cache/i.test(error.message || '')) {
+        const fallback = await supabase.from('profiles').select('username,bio,interests,display_name,avatar_id,accent_color,profile_sections,created_at').eq('id', currentUserId).single()
+        data = fallback.data; error = fallback.error
+      }
 
       if (!active) return
 
@@ -1190,9 +1210,11 @@ function SettingsPage({ currentUserId }) {
       }
 
       if (error) {
-        setMessage('Could not load profile details.')
+        setMessage(`Could not load profile: ${error.message}`)
       } else if (data) {
         setCreatedAt(data.created_at || fallbackCreatedAt)
+        localStorage.setItem(`town-accent:${currentUserId}`, PROFILE_COLORS.some(c => c[0] === data.accent_color) ? data.accent_color : '#39ff14')
+        window.dispatchEvent(new CustomEvent('town-accent-change'))
         setProfile({
           username: data.username || '',
           display_name: data.display_name || data.username || '',
@@ -1200,7 +1222,8 @@ function SettingsPage({ currentUserId }) {
           interests: data.interests || '',
           avatar_id: PROFILE_AVATARS.some(a => a[0] === data.avatar_id) ? data.avatar_id : DEFAULT_AVATAR_ID,
           accent_color: PROFILE_COLORS.some(c => c[0] === data.accent_color) ? data.accent_color : '#39ff14',
-          banner_preset: PROFILE_BANNERS.some(b => b[0] === data.banner_preset) ? data.banner_preset : 'default',
+          pet_id: PROFILE_PETS.some(p => p[0] === data.pet_id) ? data.pet_id : (localStorage.getItem(`town-pet:${currentUserId}`) || 'none'),
+          pet_name: data.pet_name || (() => { try { return JSON.parse(localStorage.getItem(`town-pet-companion:${currentUserId}`) || '{}').name || 'Pixel' } catch { return 'Pixel' } })(),
           profile_sections: {
             interests: data.profile_sections?.interests !== false,
             achievements: data.profile_sections?.achievements !== false,
@@ -1250,7 +1273,6 @@ function SettingsPage({ currentUserId }) {
     [Boolean(profile.bio.trim()), 'Write a short bio'],
     [Boolean(profile.interests.trim()), 'Add some interests'],
     [Boolean(profile.avatar_id), 'Choose an avatar'],
-    [profile.banner_preset !== 'default', 'Pick a profile banner'],
     [profile.accent_color !== '#39ff14', 'Choose an accent colour']
   ]
   const completionCount = completionItems.filter(item => item[0]).length
@@ -1284,12 +1306,18 @@ function SettingsPage({ currentUserId }) {
         interests: profile.interests.trim().slice(0, 240),
         avatar_id: profile.avatar_id,
         accent_color: profile.accent_color,
-        banner_preset: profile.banner_preset,
+        pet_id: profile.pet_id,
+        pet_name: (profile.pet_name || 'Pixel').trim().slice(0, 20) || 'Pixel',
         profile_sections: cleanSections
       })
       .eq('id', currentUserId)
 
-    setMessage(error ? 'Could not save profile details.' : 'Profile saved.')
+    if (error && /pet_id|column .* does not exist|schema cache/i.test(error.message || '')) {
+      const retry = await supabase.from('profiles').update({ display_name: profile.display_name.trim().slice(0, 32), bio: profile.bio.trim().slice(0, 240), interests: profile.interests.trim().slice(0, 240), avatar_id: profile.avatar_id, accent_color: profile.accent_color, profile_sections: cleanSections }).eq('id', currentUserId)
+      if (!retry.error) { localStorage.setItem(`town-pet:${currentUserId}`, profile.pet_id); localStorage.setItem(`town-pet-companion:${currentUserId}`, JSON.stringify({ name: profile.pet_name || 'Pixel' })); window.dispatchEvent(new CustomEvent('town-profile-saved', { detail: { pet_id: profile.pet_id } })); setMessage('Profile saved. Pet saved on this device until the Town profile migration is applied.') }
+      else setMessage(`Could not save profile: ${retry.error.message}`)
+    } else if (error) setMessage(`Could not save profile: ${error.message}`)
+    else { localStorage.setItem(`town-pet:${currentUserId}`, profile.pet_id); localStorage.setItem(`town-pet-companion:${currentUserId}`, JSON.stringify({ name: profile.pet_name || 'Pixel' })); localStorage.setItem(`town-accent:${currentUserId}`, profile.accent_color); window.dispatchEvent(new CustomEvent('town-profile-saved', { detail: { pet_id: profile.pet_id } })); setMessage('Profile saved.'); window.dispatchEvent(new CustomEvent('town-accent-change', { detail: profile.accent_color })) }
     setSaving(false)
   }
 
@@ -1320,6 +1348,17 @@ function SettingsPage({ currentUserId }) {
           .profile-toggle-list .profile-toggle input[type="checkbox"]{width:18px!important;height:18px!important;min-width:18px!important;flex:0 0 18px!important;margin:0!important;accent-color:var(--profile-accent,#39ff14)}
           .profile-toggle-list .profile-toggle span{display:block!important;margin:0!important}
           .profile-editor-compact{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+          .profile-editor-layout{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr);gap:16px;align-items:start;width:100%;min-width:0}
+          .profile-preview-card{min-width:0;max-width:190px;padding:12px;border:1px solid var(--profile-accent,#39ff14);border-radius:12px;background:#080808;display:flex;flex-direction:column;align-items:flex-start;gap:7px;overflow:hidden}
+          .profile-preview-avatar{width:54px;height:54px;flex:0 0 54px;border:1px solid var(--profile-accent,#39ff14);border-radius:9px;overflow:hidden;background:#050505}
+          .profile-preview-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+          .profile-preview-card strong,.profile-preview-card span,.profile-preview-card p{max-width:100%;overflow-wrap:anywhere;margin:0}
+          .profile-editor-fields{display:grid;gap:12px;min-width:0;width:100%}
+          .profile-editor-fields label{display:grid;gap:6px;min-width:0;width:100%}
+          .profile-editor-fields input,.profile-editor-fields textarea{box-sizing:border-box;width:100%;max-width:100%;min-width:0}
+          .profile-editor-fields textarea{min-height:84px;resize:vertical}
+          @media(max-width:620px){.profile-editor-layout{grid-template-columns:minmax(0,1fr)}.profile-preview-card{max-width:none;width:100%;box-sizing:border-box;display:grid;grid-template-columns:54px minmax(0,1fr);align-items:center}.profile-preview-card p,.profile-pet-preview{grid-column:1/-1}}
+
           .profile-current-avatar{width:74px;height:74px;border-radius:18px;border:2px solid var(--profile-accent,#39ff14);background:#050505;display:grid;place-items:center;overflow:hidden;box-shadow:0 0 14px color-mix(in srgb,var(--profile-accent,#39ff14) 24%,transparent)}
           .profile-current-avatar img{width:100%;height:100%;object-fit:cover}
           .profile-avatar-popover{margin-top:12px;padding:12px;border:1px solid #33283d;border-radius:14px;background:#09070c;max-height:300px;overflow:auto}
@@ -1332,13 +1371,14 @@ function SettingsPage({ currentUserId }) {
         `}</style>
 
         <div className="profile-editor-layout">
-          <section className={`profile-preview-card banner-${profile.banner_preset}`} style={{ '--profile-accent': profile.accent_color }}>
+          <section className="profile-preview-card" style={{ '--profile-accent': profile.accent_color }}>
             <div className="profile-preview-avatar">
               {<img src={selectedAvatarUri} alt={`${selectedAvatar[1]} profile avatar`} />}
             </div>
             <strong>{profile.display_name || profile.username || 'Your profile'}</strong>
             <span>@{profile.username}</span>
             {profile.bio && <p>{profile.bio}</p>}
+            {profile.pet_id !== 'none' && <img className="profile-pet-preview" src={`/pets/${profile.pet_id}.svg`} alt={`Selected pixel pet: ${PROFILE_PETS.find(p => p[0] === profile.pet_id)?.[1] || 'pet'}`} />}
           </section>
 
           <div className="profile-editor-fields">
@@ -1391,9 +1431,18 @@ function SettingsPage({ currentUserId }) {
         </fieldset>
 
         <fieldset className="profile-editor-section">
-          <legend>Profile banner</legend>
-          <div className="profile-banner-grid" role="group" aria-label="Profile banners">{PROFILE_BANNERS.map(([id, label]) => <button type="button" key={id} className={`profile-banner-choice banner-${id} ${profile.banner_preset === id ? 'selected' : ''}`} aria-label={`${label}${profile.banner_preset === id ? ', selected' : ''}`} aria-pressed={profile.banner_preset === id} onClick={() => setProfile({ ...profile, banner_preset: id })}><span>{label}</span></button>)}</div>
+          <legend>Pet companion</legend>
+          <label>Pet name<input value={profile.pet_name || 'Pixel'} maxLength={20} onChange={e => setProfile(current => ({ ...current, pet_name: e.target.value }))} placeholder="Give your pet a name" /></label>
+          <p className="widget-help">Choose the animal below, then save your profile. Open the pet on Home for its mood, care and animation controls.</p>
         </fieldset>
+
+        <fieldset className="profile-editor-section">
+          <legend>Choose a pixel pet <span className="optional-label">optional</span></legend>
+          <p className="widget-help">Pick a small companion to show on your profile, or choose none.</p>
+          <div className="profile-pet-grid" role="group" aria-label="Pixel pet selection">{PROFILE_PETS.map(([id, label, sprite]) => <button type="button" key={id} className={`profile-pet-choice ${profile.pet_id === id ? 'selected' : ''}`} aria-pressed={profile.pet_id === id} onClick={() => setProfile(current => ({ ...current, pet_id: id }))}>{id === 'none' ? <span className="pixel-pet-none" aria-hidden="true">×</span> : <img src={`/pets/${sprite}`} alt="" aria-hidden="true" />}<small>{label}</small></button>)}</div>
+        </fieldset>
+
+        <ShareProfileCard userId={currentUserId} profile={profile} daysJoined={daysOnSite} />
 
         <fieldset className="profile-editor-section">
           <legend>Visible sections</legend>
@@ -1413,13 +1462,46 @@ function SettingsPage({ currentUserId }) {
     </Card>
   )
 }
+function GlobalSearchBar() {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState({ posts: [], communities: [] })
+  const [loading, setLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
+  const [error, setError] = useState('')
+  const search = async (event) => {
+    event.preventDefault()
+    const term = query.trim()
+    if (term.length < 2 || !supabase) { setError(term.length < 2 ? 'Enter at least 2 characters.' : 'Search is unavailable until Town is configured.'); return }
+    setLoading(true); setError(''); setSearched(true)
+    try {
+      const safe = term.replace(/[,%()]/g, ' ').trim()
+      const [{ data: posts, error: postError }, { data: communities, error: communityError }] = await Promise.all([
+        supabase.from('posts').select('id,title,body,created_at,community_id').eq('status', 'published').or(`title.ilike.%${safe}%,body.ilike.%${safe}%`).order('created_at', { ascending: false }).limit(6),
+        supabase.from('communities').select('id,name,slug,description,category').eq('status', 'active').eq('visibility', 'public').or(`name.ilike.%${safe}%,description.ilike.%${safe}%,category.ilike.%${safe}%`).order('name').limit(6)
+      ])
+      if (postError) throw postError
+      if (communityError) throw communityError
+      setResults({ posts: posts || [], communities: communities || [] })
+    } catch (e) { setError(e.message || 'Search failed. Please try again.'); setResults({ posts: [], communities: [] }) }
+    finally { setLoading(false) }
+  }
+  return <section className="town-global-search" aria-label="Search Town"><form onSubmit={search} role="search"><label htmlFor="town-global-search-input">Search Town</label><div><input id="town-global-search-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search posts and communities…" autoComplete="off"/><button className="button primary" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button></div></form>{error && <p className="town-global-search-message" role="alert">{error}</p>}{searched && !loading && !error && <div className="town-global-results"><div className="town-global-result-group"><h2>Communities</h2>{results.communities.map(c => <a key={c.id} href={`#/community/${c.slug}`}><strong>{c.name}</strong><span>{c.description || c.category || 'Community'}</span></a>)}{!results.communities.length && <p>No matching communities.</p>}</div><div className="town-global-result-group"><h2>Posts</h2>{results.posts.map(p => <a key={p.id} href={`#/post/${p.id}`}><strong>{p.title}</strong><span>{(p.body || '').slice(0, 120)}</span></a>)}{!results.posts.length && <p>No matching posts.</p>}</div><button className="button secondary" type="button" onClick={() => { setSearched(false); setQuery('') }}>Clear results</button></div>}</section>
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [checking, setChecking] = useState(true)
   const route = useHashRoute()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [canModerate, setCanModerate] = useState(false)
+  const [globalAccent, setGlobalAccent] = useState('#39ff14')
   useEffect(() => { setMobileNavOpen(false) }, [route])
+  useEffect(() => {
+    const syncAccent = () => setGlobalAccent(localStorage.getItem(session?.user?.id ? `town-accent:${session.user.id}` : 'town-accent') || '#39ff14')
+    syncAccent()
+    window.addEventListener('town-accent-change', syncAccent)
+    return () => window.removeEventListener('town-accent-change', syncAccent)
+  }, [session?.user?.id])
   useEffect(() => {
     if (!supabase) { setChecking(false); return }
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setChecking(false) })
@@ -1462,20 +1544,21 @@ function App() {
   }
 
   const primaryNav = [
-    ['home', 'Town'],
+    ['home', 'Home'],
     ['feed', 'Feed'],
     ['communities', 'Communities'],
-    ['search', 'Search']
+    ['social', 'Chat']
   ]
 
   const personalNav = [
     ['saved', 'Saved'],
-    ['profile', 'Profile'],
-    ['reputation', 'Reputation']
+    ['settings', 'Settings'],
+    ['reputation', 'Reputation'],
+    ['profile', 'Profile']
   ]
 
   let page
-  if (routeName === 'home') page = <HomePage />
+  if (routeName === 'home') page = <HomePage currentUserId={session?.user?.id} />
   else if (routeName === 'feed') page = <FeedPage currentUserId={session?.user?.id} />
   else if (routeName === 'post' && routeParam) page = <PostPage postId={routeParam} currentUserId={session?.user?.id} />
   else if (routeName === 'create-post') page = <CreatePostPage currentUserId={session?.user?.id} />
@@ -1483,6 +1566,7 @@ function App() {
   else if (routeName === 'community' && routeParam) page = <CommunityPage slug={routeParam} currentUserId={session?.user?.id} />
   else if (routeName === 'create-community') page = <CreateCommunityPage currentUserId={session?.user?.id} />
   else if (routeName === 'search') page = <SearchPage currentUserId={session?.user?.id} />
+  else if (routeName === 'social') page = <SocialSection currentUserId={session?.user?.id} />
   else if (routeName === 'saved') page = <SavedPostsPage currentUserId={session?.user?.id} />
   else if (routeName === 'profile' && routeParam) page = <UserProfilePage userId={routeParam} />
   else if (routeName === 'community-manage' && routeParam) page = <CommunityManagePage communityId={routeParam} currentUserId={session?.user?.id} />
@@ -1502,14 +1586,14 @@ function App() {
 
   if (routeName !== 'home' && !session) return <Auth onLogin={() => window.location.reload()} />
 
-  return <div className="ps2-shell">
+  return <div className="ps2-shell" style={{ '--accent': globalAccent, '--profile-accent': globalAccent }}>
     <div className="ps2-scanlines" aria-hidden="true" />
-    <div className="pixel-cat" aria-hidden="true"><img src="/minecraft-cat.svg" alt="" /></div>
     <header className="ps2-topbar">
       <button className="mobile-nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(v => !v)}>MENU</button>
       <div className="ps2-brand">
         <div><p className="ps2-brand-title">TOWN</p></div>
       </div>
+      <a className={`ps2-top-search ${routeName === 'search' ? 'active' : ''}`} href="#/search" aria-label="Search Town">SEARCH</a>
       <div className="ps2-top-actions">
         <div className="ps2-status">
           {session
@@ -1517,7 +1601,6 @@ function App() {
             : <span>GUEST MODE</span>}
           <span className="ps2-online"><i /> ONLINE</span>
         </div>
-        {session && <a className="ps2-top-settings" href="#/settings">SETTINGS</a>}
         {session && <button className="ps2-top-signout" onClick={signOut}>SIGN OUT</button>}
       </div>
     </header>
